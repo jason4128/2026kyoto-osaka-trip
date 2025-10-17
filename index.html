@@ -33,6 +33,11 @@
             font-size: 10px;
             text-align: center;
         }
+        .datetime-cell {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
         .tab {
             padding: 8px 12px;
             font-weight: 600;
@@ -118,14 +123,11 @@
                 <table id="itineraryTable" class="min-w-full divide-y divide-gray-200">
                     <thead>
                         <tr>
-                            <th class="header-cell w-12 sm:w-16">日期</th>
-                            <th class="header-cell w-16 sm:w-20">時間</th>
+                            <th class="header-cell w-20 sm:w-24">日期/時間</th>
                             <th class="header-cell w-32 sm:w-48">地點</th>
                             <th class="header-cell w-24 sm:w-32">交通</th>
                             <th class="header-cell w-20 sm:w-28">地圖</th>
-                            <th class="header-cell w-20 sm:w-32 text-right">已支出</th>
                             <th class="header-cell w-20 sm:w-32 text-right">預算</th>
-                            <th class="header-cell w-20 sm:w-32 text-right">台幣</th>
                             <th class="header-cell w-32 sm:w-48">備註</th>
                             <th class="header-cell w-12 sm:w-16">🗑️</th>
                         </tr>
@@ -133,10 +135,8 @@
                     <tbody id="itineraryBody" class="bg-white divide-y divide-gray-200"></tbody>
                     <tfoot>
                         <tr class="bg-gradient-to-r from-blue-50 to-purple-50 text-sm sm:text-base font-bold">
-                            <td colspan="5" class="table-cell text-right">總計:</td>
-                            <td id="totalSpentJpy" class="table-cell text-right text-red-600">0 JPY</td>
+                            <td colspan="4" class="table-cell text-right">總計:</td>
                             <td id="totalEstimatedJpy" class="table-cell text-right text-red-600">0 JPY</td>
-                            <td id="totalSpentTwd" class="table-cell text-right text-green-600">0 TWD</td>
                             <td colspan="2" class="table-cell"></td>
                         </tr>
                     </tfoot>
@@ -269,19 +269,21 @@
                     ondragenter="handleDragEnter(event)" 
                     ondragleave="handleDragLeave(event)" 
                     class="hover:bg-gray-50 transition-colors">
-                    <td class="table-cell font-bold" contenteditable onblur="updateItinerary(${index}, 'day', this.textContent)">${item.day}</td>
-                    <td class="table-cell" contenteditable onblur="updateItinerary(${index}, 'time', this.textContent)">${item.time}</td>
-                    <td class="table-cell" contenteditable onblur="updateItinerary(${index}, 'location', this.textContent)">${item.location}</td>
-                    <td class="table-cell" contenteditable onblur="updateItinerary(${index}, 'travelTime', this.textContent)">${item.travelTime || ''}</td>
-                    <td class="table-cell">
+                    <td class="table-cell w-20 sm:w-24">
+                        <div class="datetime-cell">
+                            <div contenteditable onblur="updateDatetime(${index}, 'day', this.textContent)">${item.day}</div>
+                            <div contenteditable onblur="updateDatetime(${index}, 'time', this.textContent)">${item.time}</div>
+                        </div>
+                    </td>
+                    <td class="table-cell w-32 sm:w-48" contenteditable onblur="updateItinerary(${index}, 'location', this.textContent)">${item.location}</td>
+                    <td class="table-cell w-24 sm:w-32" contenteditable onblur="updateItinerary(${index}, 'travelTime', this.textContent)">${item.travelTime || ''}</td>
+                    <td class="table-cell w-20 sm:w-28">
                         <a href="${item.mapLink || '#'}" target="_blank" class="text-blue-500">${item.mapLink ? '🗺️' : '📍'}</a>
                         <button onclick="editMapLink(${index})" class="text-sm ml-1 text-gray-500">✏️</button>
                     </td>
-                    <td class="table-cell text-right"><input type="number" value="${item.spentJpy || 0}" onblur="updateItinerary(${index}, 'spentJpy', this.value)" class="currency-input"></td>
-                    <td class="table-cell text-right"><input type="number" value="${item.estimatedJpy || 0}" onblur="updateItinerary(${index}, 'estimatedJpy', this.value)" class="currency-input"></td>
-                    <td class="table-cell text-right text-green-600">${Math.round(item.spentJpy * exchangeRate).toLocaleString()} TWD</td>
-                    <td class="table-cell" contenteditable onblur="updateItinerary(${index}, 'notes', this.textContent)">${item.notes || ''}</td>
-                    <td class="table-cell text-center"><button onclick="deleteRow(${index})" class="text-red-500">🗑️</button></td>
+                    <td class="table-cell w-20 sm:w-32 text-right"><input type="number" value="${item.estimatedJpy || 0}" onblur="updateItinerary(${index}, 'estimatedJpy', this.value)" class="currency-input"></td>
+                    <td class="table-cell w-32 sm:w-48" contenteditable onblur="updateItinerary(${index}, 'notes', this.textContent)">${item.notes || ''}</td>
+                    <td class="table-cell w-12 sm:w-16 text-center"><button onclick="deleteRow(${index})" class="text-red-500">🗑️</button></td>
                 </tr>
             `).join('');
             calculateTotals();
@@ -307,7 +309,7 @@
         }
 
         function editMapLink(index) {
-            const row = document.querySelector(`#itineraryBody tr:nth-child(${index + 1}) td:nth-child(5)`);
+            const row = document.querySelector(`#itineraryBody tr:nth-child(${index + 1}) td:nth-child(4)`);
             const input = document.createElement('input');
             input.type = 'url';
             input.value = itineraryData[index].mapLink || '';
@@ -322,6 +324,12 @@
             input.focus();
         }
 
+        function updateDatetime(index, key, value) {
+            const parsed = parseInt(value) || (key === 'day' ? 1 : '00:00');
+            itineraryData[index][key] = parsed;
+            saveData();
+        }
+
         function updateItinerary(index, key, value) {
             const parsed = key.includes('Jpy') ? parseInt(value) || 0 : value;
             itineraryData[index][key] = parsed;
@@ -330,7 +338,7 @@
 
         function addRow() {
             const lastDay = itineraryData.length ? Math.max(...itineraryData.map(i => i.day)) : 1;
-            itineraryData.push({ day: lastDay, time: '', location: '', travelTime: '', mapLink: '', spentJpy: 0, estimatedJpy: 0, notes: '' });
+            itineraryData.push({ day: lastDay, time: '', location: '', travelTime: '', mapLink: '', estimatedJpy: 0, notes: '' });
             saveData();
             renderTable();
         }
@@ -344,11 +352,8 @@
         }
 
         function calculateTotals() {
-            const totalSpent = itineraryData.reduce((sum, i) => sum + (i.spentJpy || 0), 0);
             const totalEst = itineraryData.reduce((sum, i) => sum + (i.estimatedJpy || 0), 0);
-            document.getElementById('totalSpentJpy').textContent = `${totalSpent.toLocaleString()} JPY`;
             document.getElementById('totalEstimatedJpy').textContent = `${totalEst.toLocaleString()} JPY`;
-            document.getElementById('totalSpentTwd').textContent = `${Math.round(totalSpent * exchangeRate).toLocaleString()} TWD`;
         }
 
         // 分帳渲染
