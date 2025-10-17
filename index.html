@@ -61,7 +61,8 @@
         /* 桌面預設寬度 */
         .w-datetime { width: 150px; min-width: 150px; } 
         .w-location { width: 250px; min-width: 250px; }
-        .w-32 { width: 130px; min-width: 130px; }
+        /* 調整 w-32 欄位寬度以容納複合輸入框 */
+        .w-32 { width: 150px; min-width: 150px; } 
         .w-28 { width: 112px; min-width: 112px; }
         .w-48 { width: 192px; min-width: 192px; }
 
@@ -77,8 +78,8 @@
             /* 中型裝置 (平板/寬手機) 欄寬調整 */
             .w-datetime { width: 95px !important; min-width: 95px !important; } 
             .w-location { width: 150px !important; min-width: 150px !important; }
-            .w-32 { width: 90px !important; min-width: 90px !important; } 
-            .w-28 { width: 60px !important; min-width: 60px !important; }
+            .w-32 { width: 120px !important; min-width: 120px !important; } /* 調整預算欄位寬度 */
+            .w-28 { width: 60px !important; min-width: 60px !important; } 
             .w-48 { width: 130px !important; min-width: 130px !important; }
         }
 
@@ -90,7 +91,7 @@
             /* 小型裝置 (手機) 欄寬調整 - 極度緊湊 */
             .w-datetime { width: 80px !important; min-width: 80px !important; } 
             .w-location { width: 120px !important; min-width: 120px !important; }
-            .w-32 { width: 60px !important; min-width: 60px !important; }
+            .w-32 { width: 80px !important; min-width: 80px !important; } /* 調整預算欄位寬度 */
             .w-28 { width: 45px !important; min-width: 45px !important; } 
             .w-48 { width: 90px !important; min-width: 90px !important; }
         }
@@ -258,7 +259,28 @@
             });
         }
 
-        // === 輔助函數 ===
+        // === 輔助函數 (新增換算邏輯) ===
+
+        /**
+         * 轉換幣別
+         * @param {number} amount 原始金額
+         * @param {string} fromCurrency 原始幣別 ('JPY' or 'TWD')
+         * @param {string} toCurrency 目標幣別 ('JPY' or 'TWD')
+         * @returns {number} 轉換後的金額 (四捨五入到整數)
+         */
+        function convertCurrency(amount, fromCurrency, toCurrency) {
+            const num = parseFloat(amount) || 0;
+            if (fromCurrency === toCurrency) return Math.round(num);
+
+            if (fromCurrency === 'JPY' && toCurrency === 'TWD') {
+                return Math.round(num * EXCHANGE_RATE);
+            }
+            if (fromCurrency === 'TWD' && toCurrency === 'JPY') {
+                return EXCHANGE_RATE > 0 ? Math.round(num / EXCHANGE_RATE) : 0; 
+            }
+            return Math.round(num);
+        }
+
         function updateExchangeRate(rate) {
             EXCHANGE_RATE = rate;
             document.getElementById('exchangeRate').value = rate.toFixed(2);
@@ -301,7 +323,7 @@
             return `${parts[1]}/${parts[2]}`; // MM/DD
         }
 
-        // === 日期篩選器功能 ===
+        // === 日期篩選器功能 (保持不變) ===
         function populateDateFilter() {
             const select = document.getElementById('dateFilter');
             
@@ -323,7 +345,7 @@
             renderTable();
         }
 
-        // === 行程表功能 (自動排序核心) ===
+        // === 行程表功能 (更新渲染邏輯) ===
         function renderTable() {
             const tbody = document.getElementById('itineraryBody');
             tbody.innerHTML = '';
@@ -347,6 +369,10 @@
                 // 使用 originalIndex 確保 CRUD (編輯/刪除) 操作指向正確的原始數據
                 const dataIndex = item.originalIndex; 
 
+                // 處理舊資料轉換，確保有新欄位
+                const amount = item.estimatedAmount !== undefined ? item.estimatedAmount : (item.estimatedJpy || 0);
+                const currency = item.estimatedCurrency || 'JPY';
+
                 const row = tbody.insertRow();
                 row.className = 'hover:bg-gray-50 smooth-transition';
 
@@ -355,7 +381,7 @@
                     { key: 'location', editable: true, class: 'w-location' },
                     { key: 'travelTime', editable: true },
                     { key: 'mapLink', editable: false },
-                    { key: 'estimatedJpy', editable: true, budget: true, class: 'text-red-500 text-right' },
+                    { key: 'budgetInput', editable: false, budget: true, class: 'w-32 text-red-500 text-right' },
                     { key: 'notes', editable: true }
                 ];
 
@@ -373,7 +399,33 @@
                             </div>
                         `;
                     } 
-                    // === 日期/時間欄位 (MM/DD 顯示 + 24hr HH:MM) ===
+                    // === 預算輸入欄位 (新增) ===
+                    else if (field.key === 'budgetInput') {
+                        const converted = convertCurrency(amount, currency, currency === 'JPY' ? 'TWD' : 'JPY');
+                        const convertedUnit = currency === 'JPY' ? 'TWD' : 'JPY';
+                        
+                        cell.className = 'table-cell w-32 text-right p-1';
+                        cell.innerHTML = `
+                            <div class="flex flex-col items-end space-y-0.5">
+                                <div class="flex items-center border rounded-md p-1 shadow-sm bg-white focus-within:ring-2 focus-within:ring-blue-500 w-full">
+                                    <input type="number" 
+                                           value="${amount}" 
+                                           min="0"
+                                           class="w-full text-right font-semibold p-0 border-none focus:ring-0 focus:outline-none bg-transparent text-sm"
+                                           oninput="handleBudgetInput(${dataIndex}, this.value, '${currency}')"
+                                           onblur="finalizeBudgetUpdate(${dataIndex}, this.value)">
+                                    <select onchange="handleCurrencyChange(${dataIndex}, this.value)" class="text-xs font-bold border-l pl-1 bg-transparent pr-0 ml-1 h-full cursor-pointer">
+                                        <option value="JPY" ${currency === 'JPY' ? 'selected' : ''}>JPY</option>
+                                        <option value="TWD" ${currency === 'TWD' ? 'selected' : ''}>TWD</option>
+                                    </select>
+                                </div>
+                                <span class="text-xs text-gray-500 mt-0.5" id="converted-${dataIndex}">
+                                    約 ${converted.toLocaleString()} ${convertedUnit}
+                                </span>
+                            </div>
+                        `;
+                    }
+                    // === 日期/時間欄位 (保持不變) ===
                     else if (field.key === 'dateTime') {
                         const dateValue = item.day || new Date().toISOString().split('T')[0]; // YYYY-MM-DD
                         const timeValue = item.time || '09:30';
@@ -392,12 +444,13 @@
                         `;
                     }
                     else {
-                        let content = field.budget ? (item[field.key] || 0).toLocaleString() : item[field.key] || '';
+                        let content = item[field.key] || '';
                         cell.textContent = content;
                         
                         if (field.editable) {
                             cell.contentEditable = true;
-                            cell.onblur = (e) => handleCellEdit(dataIndex, field.key, e.target.innerText, field.budget);
+                            // 備註/地點/交通時間使用舊的編輯邏輯
+                            cell.onblur = (e) => handleCellEdit(dataIndex, field.key, e.target.innerText, false); 
                         }
                     }
                 });
@@ -412,24 +465,61 @@
             calculateTotals();
         }
         
-        // === 資料操作函數 (使用正確的 index) ===
+        // === 資料操作函數 (新增預算處理) ===
+
+        function handleBudgetInput(index, value, currentCurrency) {
+            // 即時更新轉換金額顯示 (不存檔)
+            const num = parseFloat(value) || 0;
+            const targetCurrency = currentCurrency === 'JPY' ? 'TWD' : 'JPY';
+            const converted = convertCurrency(num, currentCurrency, targetCurrency);
+            
+            const convertedSpan = document.getElementById(`converted-${index}`);
+            if (convertedSpan) {
+                convertedSpan.textContent = `約 ${converted.toLocaleString()} ${convertedUnit}`;
+            }
+        }
+        
+        function finalizeBudgetUpdate(index, value) {
+            // 失去焦點時儲存數據並更新總計
+            const num = parseInt(value) || 0;
+            // 必須同時處理舊資料的結構
+            itineraryData[index].estimatedAmount = num; 
+            if (itineraryData[index].estimatedJpy !== undefined) {
+                 delete itineraryData[index].estimatedJpy;
+            }
+            saveData(); 
+            calculateTotals();
+        }
+
+        function handleCurrencyChange(index, newCurrency) {
+            const item = itineraryData[index];
+            item.estimatedCurrency = newCurrency;
+            
+            // 由於幣別改變，需要重新計算即時轉換值
+            handleBudgetInput(index, item.estimatedAmount || 0, newCurrency); 
+            
+            saveData();
+            calculateTotals(); 
+        }
+
+        // 地點/交通/備註編輯 (非預算欄位)
+        function handleCellEdit(index, key, value, isBudget) {
+            // isBudget 現在永遠為 false
+            let parsed = value.trim(); 
+            itineraryData[index][key] = parsed;
+            saveData();
+            
+            if (key === 'time') {
+                renderTable(); 
+            }
+        }
+        
         function handleDateInput(index, dateValue) {
             itineraryData[index]['day'] = dateValue; 
             saveData();
             renderTable();
         }
 
-        function handleCellEdit(index, key, value, isBudget) {
-            let parsed = isBudget ? parseInt(value.replace(/[^0-9]/g, '')) || 0 : value.trim();
-            itineraryData[index][key] = parsed;
-            saveData();
-            
-            // 如果修改了時間或預算，需要重新排序/計算總計
-            if (key === 'time' || isBudget) {
-                renderTable(); 
-            }
-        }
-        
         function startMapLinkEdit(index) {
             const currentLink = itineraryData[index].mapLink || '';
             const newLink = prompt('貼上Google地圖連結:', currentLink);
@@ -452,11 +542,11 @@
                 location: "新增地點", 
                 travelTime: "", 
                 mapLink: "", 
-                estimatedJpy: 0, 
+                estimatedAmount: 0, // 新增：金額
+                estimatedCurrency: 'JPY', // 新增：幣別
                 notes: ""
             });
             saveData();
-            // 新增後會自動重新排序
             renderTable();
         }
 
@@ -468,14 +558,23 @@
             }
         }
         
-        // === 更新 calculateTotals 函數，增加 TWD 換算 (保持不變) ===
+        // === 總計計算 (更新邏輯) ===
         function calculateTotals() {
             const dataToSum = currentFilterDate === 'all' 
                 ? itineraryData
                 : itineraryData.filter(item => item.day === currentFilterDate);
 
-            const totalEstJpy = dataToSum.reduce((sum, i) => sum + (i.estimatedJpy || 0), 0);
-            const totalEstTwd = Math.round(totalEstJpy * EXCHANGE_RATE); 
+            // 1. 將所有金額統一轉換為 JPY 進行總和
+            const totalEstJpy = dataToSum.reduce((sum, i) => {
+                // 處理舊資料結構 (如果只存 estimatedJpy)
+                const amount = i.estimatedAmount !== undefined ? (i.estimatedAmount || 0) : (i.estimatedJpy || 0);
+                const currency = i.estimatedCurrency || (i.estimatedJpy !== undefined ? 'JPY' : 'JPY');
+                
+                return sum + convertCurrency(amount, currency, 'JPY');
+            }, 0);
+            
+            // 2. 根據 JPY 總和計算 TWD 總和
+            const totalEstTwd = convertCurrency(totalEstJpy, 'JPY', 'TWD');
             
             // 總計文字調整以反映篩選狀態
             const prefix = currentFilterDate === 'all' ? '總計' : `${formatDate(currentFilterDate)} 總計`;
@@ -591,6 +690,7 @@
             }
         }
 
+        // 分帳專用的 TWD 換算邏輯 (與行程表的 convertCurrency 邏輯相同)
         function calculateTwdEquivalent(amount, currency) {
             const num = parseFloat(amount) || 0;
             return currency === 'JPY' ? Math.round(num * EXCHANGE_RATE) : Math.round(num);
