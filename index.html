@@ -3,11 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>京都大阪旅遊行程及分帳系統 - 多人協作</title>
+    <title>京都大阪旅遊行程及分帳系統 v2.1</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-database-compat.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Noto+Sans+TC:wght@100..900&display=swap');
         body {
@@ -38,29 +35,31 @@
         .currency-input::-webkit-outer-spin-button, .currency-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         .dragging { opacity: 0.7; transform: rotate(2deg); border: 2px dashed #3b82f6; }
         .drag-over { border-top: 2px solid #10b981; background-color: #f0fdf4 !important; }
-        .smooth-transition { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-        .sync-status { font-size: 0.75rem; }
-        .online { color: #10b981; }
-        .offline { color: #ef4444; }
-        
+        #itineraryBody {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1px;
+            background-color: #e5e7eb;
+        }
+        .itinerary-row {
+            background-color: white;
+            display: contents;
+        }
+        .itinerary-row > td {
+            padding: 12px;
+            border-bottom: 1px solid #e5e7eb;
+            vertical-align: top;
+        }
         @media (max-width: 768px) {
+            #itineraryBody {
+                grid-template-columns: 1fr; /* 手機單列 */
+            }
             .currency-input { width: 5rem !important; font-size: 14px; }
             .table-cell { padding: 8px 4px !important; font-size: 12px; }
             .tab { padding: 8px 12px !important; font-size: 14px; }
-            #itineraryTable th, #itineraryTable td { min-width: 80px; word-break: break-word; }
-            #itineraryTable { table-layout: fixed; width: 100%; }
-            .header-cell { font-size: 12px; padding: 8px 4px; }
-            .p-6 { padding: 1rem; }
-            .p-4 { padding: 0.75rem; }
-            .overflow-x-auto { overflow-x: scroll; -webkit-overflow-scrolling: touch; }
-            .grid-cols-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .itinerary-row > td { padding: 8px 4px; }
         }
-        @media (max-width: 640px) {
-            .table-cell { padding: 6px 2px !important; font-size: 11px !important; min-width: 60px !important; }
-            #itineraryTable th { font-size: 10px !important; padding: 8px 2px !important; }
-            .currency-input-container { width: 100% !important; justify-content: center !important; }
-            .header-cell { padding: 6px 2px !important; font-size: 9px !important; }
-        }
+        .smooth-transition { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
     </style>
 </head>
 <body class="p-4 sm:p-8 min-h-screen">
@@ -68,12 +67,8 @@
         
         <!-- Header -->
         <header class="p-6 bg-gradient-to-r from-blue-600 to-purple-600 rounded-t-xl">
-            <h1 class="text-3xl font-bold text-white mb-2">🇯🇵 京都大阪旅遊規劃 🏯</h1>
+            <h1 class="text-3xl font-bold text-white mb-2">🇯🇵 京都大阪4天3夜旅遊規劃 v2.1 🏯</h1>
             <p class="text-blue-100 text-sm">✨ 拖曳整列調整順序 | ✏️點擊編輯地圖 | 即時分帳計算</p>
-            <div class="flex items-center justify-between mt-2">
-                <span id="syncStatus" class="sync-status online">🟢 即時同步中</span>
-                <span class="text-xs text-blue-100">最後更新: <span id="lastUpdate">--</span></span>
-            </div>
         </header>
 
         <!-- Navigation Tabs -->
@@ -90,18 +85,19 @@
                     <span class="text-sm font-semibold text-gray-600">1 JPY = </span>
                     <input type="number" id="exchangeRate" value="22.50" step="0.01" min="0.01"
                            class="w-20 text-sm text-right font-semibold p-0 border-none focus:ring-0 focus:outline-none bg-transparent"
-                           oninput="updateExchangeRate(parseFloat(this.value)); calculateTotals(); renderSplitView(); saveData()"
+                           oninput="updateExchangeRate(parseFloat(this.value)); calculateTotals(); renderSplitView()"
                            title="即時匯率 (例如: 22.50)">
                     <span class="text-sm text-gray-600"> TWD</span>
                 </div>
                 <button onclick="fetchExchangeRate()" class="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600">🔄 更新</button>
             </div>
             <div id="itinerary-actions" class="">
-                <button onclick="addRow(); saveData()" class="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2 px-4 rounded-lg shadow transition duration-200 text-sm">+ 新增行程</button>
+                <button onclick="addRow()" class="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2 px-4 rounded-lg shadow transition duration-200 text-sm">+ 新增行程</button>
+                <button onclick="loadDefaultItinerary()" class="bg-purple-500 hover:bg-purple-600 text-white font-semibold py-2 px-4 rounded-lg shadow ml-2 text-sm">📋 載入預設</button>
             </div>
             <div id="split-actions" class="hidden flex space-x-2">
-                <button onclick="addExpense(); saveData()" class="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2 px-4 rounded-lg shadow text-sm">+ 登載支出</button>
-                <button onclick="togglePersonEditModal(); saveData()" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg shadow text-sm">👤 編輯人名</button>
+                <button onclick="addExpense()" class="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2 px-4 rounded-lg shadow text-sm">+ 登載支出</button>
+                <button onclick="togglePersonEditModal()" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg shadow text-sm">👤 編輯人名</button>
             </div>
         </div>
 
@@ -123,7 +119,9 @@
                             <th class="header-cell w-16">🗑️</th>
                         </tr>
                     </thead>
-                    <tbody id="itineraryBody" class="bg-white divide-y divide-gray-200 text-sm"></tbody>
+                    <tbody id="itineraryBody" class="bg-white divide-y divide-gray-200 text-sm">
+                        <!-- 行程數據由 JavaScript 動態生成 -->
+                    </tbody>
                     <tfoot>
                         <tr class="bg-gradient-to-r from-blue-50 to-purple-50 text-base font-bold text-gray-800">
                             <td colspan="5" class="table-cell text-right py-4">總計:</td>
@@ -140,16 +138,6 @@
         <!-- Split View -->
         <div id="split-view" class="p-4 sm:p-6 hidden">
             <h2 class="text-2xl font-semibold text-gray-800 mb-4 border-b pb-2">💵 支出登載表</h2>
-            <div class="flex gap-2 mb-4">
-                <select id="categoryFilter" class="p-2 border rounded w-full sm:w-auto" onchange="filterExpenses()">
-                    <option value="">所有類別</option>
-                    <option value="交通">交通</option>
-                    <option value="餐飲">餐飲</option>
-                    <option value="門票">門票</option>
-                    <option value="住宿">住宿</option>
-                    <option value="購物">購物</option>
-                </select>
-            </div>
             <div class="overflow-x-auto mb-8 shadow-md rounded-lg border">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
@@ -162,7 +150,9 @@
                             <th class="p-3 w-16">🗑️</th>
                         </tr>
                     </thead>
-                    <tbody id="expensesBody" class="bg-white divide-y divide-gray-200 text-sm"></tbody>
+                    <tbody id="expensesBody" class="bg-white divide-y divide-gray-200 text-sm">
+                        <!-- 支出數據由 JavaScript 動態生成 -->
+                    </tbody>
                 </table>
             </div>
 
@@ -174,62 +164,41 @@
     </div>
 
     <script>
-        // === Firebase 配置 ===
-        const firebaseConfig = {
-            apiKey: "AIzaSyxxxxxxxxxxxxxxxxxxxx",  // 貼上您的 API Key
-            authDomain: "japantravel-8e369.firebaseapp.com",
-            databaseURL: "https://japantravel-8e369-default-rtdb.firebaseio.com",
-            projectId: "japantravel-8e369",
-            storageBucket: "japantravel-8e369.appspot.com",
-            messagingSenderId: "xxxxxxxxxxx",  // 貼上您的 Sender ID
-            appId: "1:xxxxxxxxxxx:web:xxxxxxxxxxxxxxxx"  // 貼上您的 App ID
-        };
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.database();
-
         // === 全域變數 ===
-        let EXCHANGE_RATE = 22.50;
-        const DEFAULT_PEOPLE = ['A君', 'B君', 'C君', 'D君', 'E君', 'F君'];
-        let PEOPLE = DEFAULT_PEOPLE;
+        const JPY_TO_TWD_RATE_KEY = 'jpyToTwdRate';
+        const ITINERARY_KEY = 'itineraryData';
+        const EXPENSES_KEY = 'splitExpenses';
+        const PEOPLE_KEY = 'splitPeople';
         
-        let itineraryData = [];
-        let expenses = [];
+        let EXCHANGE_RATE = parseFloat(localStorage.getItem(JPY_TO_TWD_RATE_KEY)) || 22.50;
+        const DEFAULT_PEOPLE = ['A君', 'B君', 'C君', 'D君', 'E君', 'F君'];
+        let PEOPLE = JSON.parse(localStorage.getItem(PEOPLE_KEY)) || DEFAULT_PEOPLE;
+        
+        // 🚀 根據您提供的行程更新預設行程
+        const DEFAULT_ITINERARY = [
+            { day: 1, time: "10:40", location: "關西機場 (KIX)", travelTime: "-", mapLink: "https://maps.app.goo.gl/xtkMSFk3du8WPVm56", spentJpy: 0, estimatedJpy: 0, notes: "抵達，國際航班" },
+            { day: 1, time: "11:15", location: "Haruka 特急列車", travelTime: "75分鐘", mapLink: "", spentJpy: 0, estimatedJpy: 3000, notes: "前往京都，預估費用/人，11:30班" },
+            { day: 1, time: "12:45", location: "京都車站", travelTime: "-", mapLink: "https://maps.app.goo.gl/WCbZVcRP3QuDkZrx6", spentJpy: 0, estimatedJpy: 0, notes: "下車，準備前往 teamLab" },
+            { day: 1, time: "13:00", location: "teamLab 京都", travelTime: "步行10-15分鐘", mapLink: "https://maps.app.goo.gl/BwFDkKYabevQ8f2ZA", spentJpy: 0, estimatedJpy: 1500, notes: "看展，預估門票/人" },
+            { day: 1, time: "15:00", location: "祇園丸太町住宿", travelTime: "地鐵/巴士15-20分", mapLink: "https://maps.app.goo.gl/DeLeDL48Ep9YCfZL8", spentJpy: 0, estimatedJpy: 0, notes: "抵達寄放行李，15:00入住，5晚" },
+            { day: 5, time: "11:00", location: "祇園丸太町住宿", travelTime: "-", mapLink: "https://maps.app.goo.gl/DeLeDL48Ep9YCfZL8", spentJpy: 0, estimatedJpy: 0, notes: "退房" },
+            { day: 5, time: "14:00", location: "鶴INN 里仁居", travelTime: "地鐵/巴士約1小時", mapLink: "https://maps.app.goo.gl/3ubHUkZm48rxG9WV7", spentJpy: 0, estimatedJpy: 0, notes: "抵達，16:00入住，3晚" },
+            { day: 8, time: "09:00", location: "鶴INN 里仁居", travelTime: "-", mapLink: "https://maps.app.goo.gl/3ubHUkZm48rxG9WV7", spentJpy: 0, estimatedJpy: 0, notes: "退房準備，回程" },
+            { day: 8, time: "09:30", location: "Haruka 特急列車", travelTime: "75分鐘", mapLink: "", spentJpy: 0, estimatedJpy: 3000, notes: "回關西機場，預估費用/人" },
+            { day: 8, time: "10:45", location: "關西機場 (KIX)", travelTime: "-", mapLink: "https://maps.app.goo.gl/xtkMSFk3du8WPVm56", spentJpy: 0, estimatedJpy: 0, notes: "抵達機場，11:30航班" }
+        ];
+        
+        let itineraryData = JSON.parse(localStorage.getItem(ITINERARY_KEY)) || DEFAULT_ITINERARY;
+        let expenses = JSON.parse(localStorage.getItem(EXPENSES_KEY)) || [
+            { id: Date.now() - 1, description: "來回機票", amount: 33500, currency: "TWD", payer: 'A君' },
+            { id: Date.now(), description: "Day1晚餐", amount: 8400, currency: "JPY", payer: 'C君' }
+        ];
         let currentPage = 'itinerary';
-
-        // === 即時監聽資料 ===
-        db.ref('/').on('value', (snapshot) => {
-            const data = snapshot.val() || {};
-            itineraryData = data.itinerary || [];
-            expenses = data.expenses || [];
-            PEOPLE = data.people || DEFAULT_PEOPLE;
-            EXCHANGE_RATE = data.rate || 22.50;
-            document.getElementById('exchangeRate').value = EXCHANGE_RATE.toFixed(2);
-            document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString('zh-TW');
-            if (currentPage === 'itinerary') renderTable();
-            if (currentPage === 'split') renderSplitView();
-            calculateTotals();
-            calculateAndRenderSettlement();
-        });
-
-        // === 儲存資料 ===
-        function saveData() {
-            db.ref('/').set({
-                itinerary: itineraryData,
-                expenses: expenses,
-                people: PEOPLE,
-                rate: EXCHANGE_RATE
-            }).then(() => {
-                document.getElementById('syncStatus').className = 'sync-status online';
-                document.getElementById('syncStatus').textContent = '🟢 同步成功';
-            }).catch(() => {
-                document.getElementById('syncStatus').className = 'sync-status offline';
-                document.getElementById('syncStatus').textContent = '🔴 同步失敗';
-            });
-        }
 
         // === 核心功能 ===
         function updateExchangeRate(rate) {
             EXCHANGE_RATE = rate;
+            localStorage.setItem(JPY_TO_TWD_RATE_KEY, rate.toFixed(2));
             document.getElementById('exchangeRate').value = rate.toFixed(2);
         }
 
@@ -237,8 +206,8 @@
             try {
                 const response = await fetch('https://api.exchangerate-api.com/v4/latest/JPY');
                 const data = await response.json();
-                updateExchangeRate(data.rates.TWD);
-                saveData();
+                const rate = data.rates.TWD;
+                updateExchangeRate(rate);
                 calculateTotals();
                 renderSplitView();
             } catch (e) {
@@ -263,14 +232,19 @@
             tbody.innerHTML = '';
             
             itineraryData.forEach((item, index) => {
-                const row = tbody.insertRow();
-                row.className = 'hover:bg-gray-50 smooth-transition cursor-move';
+                const row = document.createElement('tr');
+                row.className = 'itinerary-row hover:bg-gray-50 smooth-transition cursor-move';
+                row.dataset.index = index;
                 row.draggable = true;
-                row.ondragstart = (e) => handleDragStart(e, index);
-                row.ondragover = handleDragOver;
-                row.ondrop = (e) => handleDrop(e, index);
-                row.ondragenter = handleDragEnter;
-                row.ondragleave = handleDragLeave;
+                row.addEventListener('dragstart', (e) => handleDragStart(e, index));
+                row.addEventListener('dragover', handleDragOver);
+                row.addEventListener('drop', (e) => handleDrop(e, index));
+                row.addEventListener('dragenter', handleDragEnter);
+                row.addEventListener('dragleave', handleDragLeave);
+                // 觸控事件支持
+                row.addEventListener('touchstart', (e) => handleTouchStart(e, index), { passive: true });
+                row.addEventListener('touchmove', handleTouchMove);
+                row.addEventListener('touchend', handleTouchEnd);
 
                 const cells = [
                     { key: 'day', editable: true, class: 'font-bold' },
@@ -285,7 +259,7 @@
                 ];
 
                 cells.forEach(field => {
-                    const cell = row.insertCell();
+                    const cell = document.createElement('td');
                     cell.className = `table-cell ${field.class || ''}`;
                     
                     if (field.key === 'mapLink') {
@@ -309,11 +283,15 @@
                             cell.onblur = (e) => handleCellEdit(index, field.key, e.target.innerText, field.budget);
                         }
                     }
+                    row.appendChild(cell);
                 });
 
-                const delCell = row.insertCell();
+                const delCell = document.createElement('td');
                 delCell.className = 'table-cell text-center';
                 delCell.innerHTML = `<button onclick="deleteRow(${index})" class="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50">🗑️</button>`;
+                row.appendChild(delCell);
+
+                tbody.appendChild(row);
             });
             calculateTotals();
         }
@@ -321,7 +299,7 @@
         function handleCellEdit(index, key, value, isBudget) {
             let parsed = isBudget ? parseInt(value.replace(/[^0-9]/g, '')) || 0 : value.trim();
             itineraryData[index][key] = parsed;
-            saveData();
+            saveItinerary();
             renderTable();
         }
 
@@ -335,7 +313,7 @@
             input.placeholder = '貼上Google地圖連結';
             input.onblur = () => {
                 itineraryData[index].mapLink = input.value;
-                saveData();
+                saveItinerary();
                 renderTable();
             };
             input.onkeypress = (e) => e.key === 'Enter' && input.blur();
@@ -345,17 +323,73 @@
         }
 
         let draggedIndex = null;
-        function handleDragStart(e, index) { draggedIndex = index; e.target.classList.add('dragging'); }
+        let touchStartIndex = null;
+        let touchStartY = 0;
+
+        function handleDragStart(e, index) {
+            draggedIndex = index;
+            e.target.classList.add('dragging');
+        }
+
         function handleDragOver(e) { e.preventDefault(); }
+
         function handleDragEnter(e) { e.target.closest('tr')?.classList.add('drag-over'); }
+
         function handleDragLeave(e) { e.target.closest('tr')?.classList.remove('drag-over'); }
+
         function handleDrop(e, targetIndex) {
             e.preventDefault();
             document.querySelectorAll('tr').forEach(tr => tr.classList.remove('dragging', 'drag-over'));
             if (draggedIndex !== targetIndex) {
                 const [item] = itineraryData.splice(draggedIndex, 1);
                 itineraryData.splice(targetIndex, 0, item);
-                saveData();
+                saveItinerary();
+                renderTable();
+            }
+        }
+
+        // 觸控事件處理
+        function handleTouchStart(e, index) {
+            touchStartIndex = index;
+            touchStartY = e.touches[0].clientY;
+            e.target.classList.add('dragging');
+        }
+
+        function handleTouchMove(e) {
+            if (touchStartIndex === null) return;
+            const touchY = e.touches[0].clientY;
+            const deltaY = touchY - touchStartY;
+            const rows = Array.from(document.querySelectorAll('#itineraryBody .itinerary-row'));
+            const currentRow = rows[touchStartIndex];
+            const rect = currentRow.getBoundingClientRect();
+            const scrollThreshold = 50;
+
+            if (deltaY > 0) {
+                // 向下拖曳
+                const nextRow = rows[touchStartIndex + 1];
+                if (nextRow && touchY > rect.bottom + scrollThreshold) {
+                    handleTouchDrop(touchStartIndex, touchStartIndex + 1);
+                }
+            } else if (deltaY < 0) {
+                // 向上拖曳
+                const prevRow = rows[touchStartIndex - 1];
+                if (prevRow && touchY < rect.top - scrollThreshold) {
+                    handleTouchDrop(touchStartIndex, touchStartIndex - 1);
+                }
+            }
+        }
+
+        function handleTouchEnd() {
+            document.querySelectorAll('tr').forEach(tr => tr.classList.remove('dragging', 'drag-over'));
+            touchStartIndex = null;
+            touchStartY = 0;
+        }
+
+        function handleTouchDrop(fromIndex, toIndex) {
+            if (fromIndex !== toIndex) {
+                const [item] = itineraryData.splice(fromIndex, 1);
+                itineraryData.splice(toIndex, 0, item);
+                saveItinerary();
                 renderTable();
             }
         }
@@ -366,14 +400,22 @@
                 day: lastDay, time: "00:00", location: "新增地點", travelTime: "", 
                 mapLink: "", spentJpy: 0, estimatedJpy: 0, notes: ""
             });
-            saveData();
+            saveItinerary();
             renderTable();
         }
 
         function deleteRow(index) {
             if (confirm('確定刪除此行程？')) {
                 itineraryData.splice(index, 1);
-                saveData();
+                saveItinerary();
+                renderTable();
+            }
+        }
+
+        function loadDefaultItinerary() {
+            if (confirm('載入預設4天3夜行程，將覆蓋現有資料？')) {
+                itineraryData = [...DEFAULT_ITINERARY];
+                saveItinerary();
                 renderTable();
             }
         }
@@ -386,7 +428,9 @@
             document.getElementById('totalSpentTwd').textContent = `${Math.round(totalSpent * EXCHANGE_RATE).toLocaleString()} TWD`;
         }
 
-        // === 分帳功能 ===
+        function saveItinerary() { localStorage.setItem(ITINERARY_KEY, JSON.stringify(itineraryData)); }
+
+        // 🔥 === 分帳功能 ===
         let updateTimeout = null;
 
         function renderSplitView() {
@@ -452,7 +496,7 @@
             const expense = expenses.find(e => e.id === id);
             if (expense) {
                 expense.amount = parseFloat(value) || 0;
-                saveData();
+                localStorage.setItem(EXPENSES_KEY, JSON.stringify(expenses));
                 setTimeout(() => calculateAndRenderSettlement(), 200);
             }
         }
@@ -474,7 +518,7 @@
             const expense = expenses.find(e => e.id === id);
             if (expense) {
                 expense[field] = value;
-                saveData();
+                localStorage.setItem(EXPENSES_KEY, JSON.stringify(expenses));
                 
                 if (field === 'currency' || field === 'amount') {
                     const twdCell = document.getElementById(`twd-${id}`);
@@ -483,7 +527,7 @@
                     }
                 }
                 
-                setTimeout(() => renderSplitView(), 200);
+                setTimeout(() => calculateAndRenderSettlement(), 200);
             }
         }
 
@@ -496,14 +540,14 @@
             expenses.push({
                 id: Date.now(), description: '新支出', amount: 0, currency: 'JPY', payer: PEOPLE[0]
             });
-            saveData();
+            localStorage.setItem(EXPENSES_KEY, JSON.stringify(expenses));
             renderSplitView();
         }
 
         function deleteExpense(id) {
             if (confirm('確定刪除？')) {
                 expenses = expenses.filter(e => e.id !== id);
-                saveData();
+                localStorage.setItem(EXPENSES_KEY, JSON.stringify(expenses));
                 renderSplitView();
             }
         }
@@ -514,7 +558,7 @@
                 const newPeople = names.split(',').map(n => n.trim()).filter(Boolean);
                 if (newPeople.length === 6) {
                     PEOPLE = newPeople;
-                    saveData();
+                    localStorage.setItem(PEOPLE_KEY, JSON.stringify(PEOPLE));
                     renderSplitView();
                 } else alert('請輸入正好6個姓名！');
             }
