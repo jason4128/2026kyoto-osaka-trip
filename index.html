@@ -116,9 +116,7 @@
                             <th class="header-cell w-48">地點</th>
                             <th class="header-cell w-32">交通</th>
                             <th class="header-cell w-28">地圖</th>
-                            <th class="header-cell w-32 text-right">✅ 已支出</th>
                             <th class="header-cell w-32 text-right">💰 預算</th>
-                            <th class="header-cell w-32 text-right">台幣</th>
                             <th class="header-cell w-48 rounded-tr-xl">備註</th>
                             <th class="header-cell w-16">🗑️</th>
                         </tr>
@@ -126,11 +124,9 @@
                     <tbody id="itineraryBody" class="bg-white divide-y divide-gray-200 text-sm"></tbody>
                     <tfoot>
                         <tr class="bg-gradient-to-r from-blue-50 to-purple-50 text-base font-bold text-gray-800">
-                            <td colspan="5" class="table-cell text-right py-4">總計:</td>
-                            <td id="totalSpentJpy" class="table-cell text-right py-4 text-red-600">0 JPY</td>
+                            <td colspan="4" class="table-cell text-right py-4">總計:</td>
                             <td id="totalEstimatedJpy" class="table-cell text-right py-4 text-red-600">0 JPY</td>
-                            <td id="totalSpentTwd" class="table-cell text-right py-4 text-green-600">0 TWD</td>
-                            <td colspan="2" class="table-cell py-4"></td>
+                            <td colspan="3" class="table-cell py-4"></td>
                         </tr>
                     </tfoot>
                 </table>
@@ -257,7 +253,7 @@
             if (pageName === 'split') renderSplitView();
         }
 
-        // === 行程表功能 ===
+        // === 行程表功能（已移除已支出&台幣欄位） ===
         function renderTable() {
             const tbody = document.getElementById('itineraryBody');
             tbody.innerHTML = '';
@@ -278,9 +274,7 @@
                     { key: 'location', editable: true },
                     { key: 'travelTime', editable: true },
                     { key: 'mapLink', editable: false },
-                    { key: 'spentJpy', editable: true, budget: true, class: 'text-red-500 text-right' },
                     { key: 'estimatedJpy', editable: true, budget: true, class: 'text-red-500 text-right' },
-                    { key: 'twd', computed: true, class: 'text-green-600 text-right font-mono' },
                     { key: 'notes', editable: true }
                 ];
 
@@ -297,9 +291,6 @@
                                 <button onclick="startMapLinkEdit(${index})" class="p-1 hover:bg-blue-100 rounded-full">✏️</button>
                             </div>
                         `;
-                    } else if (field.computed) {
-                        const twd = Math.round(item.spentJpy * EXCHANGE_RATE);
-                        cell.textContent = `${twd.toLocaleString()} TWD`;
                     } else {
                         let content = field.budget ? (item[field.key] || 0).toLocaleString() : item[field.key] || '';
                         cell.textContent = content;
@@ -364,7 +355,7 @@
             const lastDay = itineraryData.length ? Math.max(...itineraryData.map(i => i.day)) : 1;
             itineraryData.push({
                 day: lastDay, time: "00:00", location: "新增地點", travelTime: "", 
-                mapLink: "", spentJpy: 0, estimatedJpy: 0, notes: ""
+                mapLink: "", estimatedJpy: 0, notes: ""
             });
             saveData();
             renderTable();
@@ -379,14 +370,11 @@
         }
 
         function calculateTotals() {
-            const totalSpent = itineraryData.reduce((sum, i) => sum + (i.spentJpy || 0), 0);
             const totalEst = itineraryData.reduce((sum, i) => sum + (i.estimatedJpy || 0), 0);
-            document.getElementById('totalSpentJpy').textContent = `${totalSpent.toLocaleString()} JPY`;
             document.getElementById('totalEstimatedJpy').textContent = `${totalEst.toLocaleString()} JPY`;
-            document.getElementById('totalSpentTwd').textContent = `${Math.round(totalSpent * EXCHANGE_RATE).toLocaleString()} TWD`;
         }
 
-        // === 分帳功能 ===
+        // === 分帳功能（保持完全不變） ===
         let updateTimeout = null;
 
         function renderSplitView() {
@@ -616,6 +604,10 @@
                 `).join('');
                 listDiv.className = 'space-y-3 p-4 border rounded-lg bg-yellow-50 text-gray-800';
             }
+        }
+
+        function filterExpenses() {
+            // 暫時空實現
         }
 
         // === 初始化 ===
