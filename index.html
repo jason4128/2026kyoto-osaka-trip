@@ -259,7 +259,7 @@
             });
         }
 
-        // === 輔助函數 (新增換算邏輯) ===
+        // === 輔助函數 (新增換算邏輯 & 尋找最新時間) ===
 
         /**
          * 轉換幣別
@@ -279,6 +279,68 @@
                 return EXCHANGE_RATE > 0 ? Math.round(num / EXCHANGE_RATE) : 0; 
             }
             return Math.round(num);
+        }
+
+        /**
+         * 尋找目前行程中最新的日期和時間，並推算 30 分鐘後的時間。
+         * 如果有設定篩選日期，則只在該日期內尋找。
+         * @returns {object} {day: 'YYYY-MM-DD', time: 'HH:MM'}
+         */
+        function findLatestDateTime() {
+            let dataToSearch = itineraryData;
+            let targetDay = new Date().toISOString().split('T')[0]; // Default to today
+
+            if (currentFilterDate !== 'all' && currentFilterDate) {
+                // 如果篩選了特定日期，只搜尋該日期內的行程
+                dataToSearch = itineraryData.filter(item => item.day === currentFilterDate);
+                targetDay = currentFilterDate;
+            }
+
+            if (dataToSearch.length === 0) {
+                // 如果沒有行程，或篩選日期當天沒有行程，使用 targetDay 和預設時間
+                return {
+                    day: targetDay,
+                    time: '09:30'
+                };
+            }
+
+            // 1. 找到篩選範圍內最晚的時間
+            const latestEntry = dataToSearch.reduce((latest, current) => {
+                const currentDateTime = (current.day || '1000-01-01') + (current.time || '00:00');
+                const latestDateTime = (latest.day || '1000-01-01') + (latest.time || '00:00');
+                return currentDateTime > latestDateTime ? current : latest;
+            }, dataToSearch[0]);
+
+            const latestTime = latestEntry.time || '09:30';
+            const latestDay = latestEntry.day || targetDay;
+
+            // 2. 建立 Date 物件並加上 30 分鐘
+            const [latestHours, latestMinutes] = latestTime.split(':').map(Number);
+            const latestDateObj = new Date(latestDay);
+            
+            // 設定時/分，並加上 30 分鐘 (Date 物件會自動處理小時和日期溢位)
+            latestDateObj.setHours(latestHours);
+            latestDateObj.setMinutes(latestMinutes + 30);
+            latestDateObj.setSeconds(0);
+            latestDateObj.setMilliseconds(0);
+            
+            // 3. 取得新的分鐘數，並向上取整到最近的 15 分鐘間隔 (00, 15, 30, 45)
+            
+            // Math.ceil(46/15) * 15 = 4 * 15 = 60
+            // Math.ceil(37/15) * 15 = 3 * 15 = 45
+            let roundedMinutes = Math.ceil(latestDateObj.getMinutes() / 15) * 15;
+            
+            // 重新設定分鐘數，讓 Date 物件處理溢位
+            latestDateObj.setMinutes(roundedMinutes);
+
+            const finalNewDay = latestDateObj.toISOString().split('T')[0];
+            const finalNewHours = String(latestDateObj.getHours()).padStart(2, '0');
+            const finalNewMinutes = String(latestDateObj.getMinutes()).padStart(2, '0');
+
+            return {
+                day: finalNewDay,
+                time: `${finalNewHours}:${finalNewMinutes}`
+            };
         }
 
         function updateExchangeRate(rate) {
@@ -399,7 +461,7 @@
                             </div>
                         `;
                     } 
-                    // === 預算輸入欄位 (新增) ===
+                    // === 預算輸入欄位 ===
                     else if (field.key === 'budgetInput') {
                         const converted = convertCurrency(amount, currency, currency === 'JPY' ? 'TWD' : 'JPY');
                         const convertedUnit = currency === 'JPY' ? 'TWD' : 'JPY';
@@ -425,7 +487,7 @@
                             </div>
                         `;
                     }
-                    // === 日期/時間欄位 (保持不變) ===
+                    // === 日期/時間欄位 (新增 step="900") ===
                     else if (field.key === 'dateTime') {
                         const dateValue = item.day || new Date().toISOString().split('T')[0]; // YYYY-MM-DD
                         const timeValue = item.time || '09:30';
@@ -438,6 +500,7 @@
                                        class="absolute top-0 left-0 w-full h-1/2 opacity-0 cursor-pointer"
                                        onchange="handleDateInput(${dataIndex}, this.value)">
                                 <input type="time" value="${timeValue}" 
+                                       step="900" 
                                        class="w-full text-center focus:outline-none focus:ring-0 text-sm"
                                        onchange="handleCellEdit(${dataIndex}, 'time', this.value, false)">
                             </div>
@@ -465,7 +528,7 @@
             calculateTotals();
         }
         
-        // === 資料操作函數 (新增預算處理) ===
+        // === 資料操作函數 ===
 
         function handleBudgetInput(index, value, currentCurrency) {
             // 即時更新轉換金額顯示 (不存檔)
@@ -475,7 +538,7 @@
             
             const convertedSpan = document.getElementById(`converted-${index}`);
             if (convertedSpan) {
-                convertedSpan.textContent = `約 ${converted.toLocaleString()} ${convertedUnit}`;
+                convertedSpan.textContent = `約 ${converted.toLocaleString()} ${targetCurrency}`;
             }
         }
         
@@ -504,7 +567,6 @@
 
         // 地點/交通/備註編輯 (非預算欄位)
         function handleCellEdit(index, key, value, isBudget) {
-            // isBudget 現在永遠為 false
             let parsed = value.trim(); 
             itineraryData[index][key] = parsed;
             saveData();
@@ -531,22 +593,22 @@
             }
         }
 
+        // **【更新】addRow 函數，使用 findLatestDateTime 取得最新的時間 (已考慮篩選器)**
         function addRow() {
-            const defaultDate = itineraryData.length 
-                ? itineraryData[itineraryData.length - 1].day || new Date().toISOString().split('T')[0]
-                : new Date().toISOString().split('T')[0];
+            const latestDateTime = findLatestDateTime();
 
             itineraryData.push({
-                day: defaultDate, 
-                time: "09:30", 
+                day: latestDateTime.day, 
+                time: latestDateTime.time, 
                 location: "新增地點", 
                 travelTime: "", 
                 mapLink: "", 
-                estimatedAmount: 0, // 新增：金額
-                estimatedCurrency: 'JPY', // 新增：幣別
+                estimatedAmount: 0, 
+                estimatedCurrency: 'JPY', 
                 notes: ""
             });
             saveData();
+            // 新增後會自動重新排序
             renderTable();
         }
 
@@ -823,7 +885,7 @@
         }
 
         function filterExpenses() {
-            // 待實作：根據 categoryFilter 選擇的值來過濾 expenses 陣列並重新渲染表格
+            // 暫時空實現
         }
 
         // === 初始化 ===
