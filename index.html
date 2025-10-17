@@ -35,8 +35,6 @@
         .currency-input-container:focus-within { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.5); }
         .currency-input { appearance: none; width: 8rem; text-align: right; padding: 0; border: none; outline: none; background: transparent; }
         .currency-input::-webkit-outer-spin-button, .currency-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-        .dragging { opacity: 0.7; transform: rotate(2deg); border: 2px dashed #3b82f6; }
-        .drag-over { border-top: 2px solid #10b981; background-color: #f0fdf4 !important; }
         .smooth-transition { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
         .sync-status { font-size: 0.75rem; }
         .online { color: #10b981; }
@@ -44,7 +42,10 @@
         
         /* 針對日期/時間輸入框的樣式調整 */
         .date-time-input {
-            position: relative; /* 為了讓 hidden input 覆蓋在 span 上 */
+            position: relative; 
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
         .date-time-input input[type="time"] {
             border: none !important;
@@ -54,6 +55,7 @@
             font-size: 13px !important;
             color: #4b5563;
             background: transparent !important;
+            text-align: center;
         }
 
         /* 桌面預設寬度 */
@@ -86,10 +88,10 @@
             .header-cell { padding: 6px 2px !important; font-size: 9px !important; }
             
             /* 小型裝置 (手機) 欄寬調整 - 極度緊湊 */
-            .w-datetime { width: 80px !important; min-width: 80px !important; } /* MM/DD \n HH:MM */
+            .w-datetime { width: 80px !important; min-width: 80px !important; } 
             .w-location { width: 120px !important; min-width: 120px !important; }
             .w-32 { width: 60px !important; min-width: 60px !important; }
-            .w-28 { width: 45px !important; min-width: 45px !important; } /* 地圖圖標 */
+            .w-28 { width: 45px !important; min-width: 45px !important; } 
             .w-48 { width: 90px !important; min-width: 90px !important; }
         }
     </style>
@@ -99,7 +101,7 @@
         
         <header class="p-6 bg-gradient-to-r from-blue-600 to-purple-600 rounded-t-xl">
             <h1 class="text-3xl font-bold text-white mb-2">🇯🇵 京都大阪4天3夜旅遊規劃 🏯</h1>
-            <p class="text-blue-100 text-sm">✨ 拖曳整列調整順序 | ✏️點擊編輯地圖 | 即時分帳計算</p>
+            <p class="text-blue-100 text-sm">✨ 自動按日期時間排序 | ✏️點擊編輯地圖 | 即時分帳計算</p>
             <div class="flex items-center justify-between mt-2">
                 <span id="syncStatus" class="sync-status online">🟢 即時同步中</span>
                 <span class="text-xs text-blue-100">最後更新: <span id="lastUpdate">--</span></span>
@@ -124,9 +126,14 @@
                 </div>
                 <button onclick="fetchExchangeRate()" class="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600">🔄 更新</button>
             </div>
-            <div id="itinerary-actions" class="">
+
+            <div id="itinerary-actions" class="flex items-center space-x-3">
+                <label for="dateFilter" class="text-sm font-medium text-gray-700">篩選日期:</label>
+                <select id="dateFilter" class="p-2 border rounded-md shadow-sm bg-white text-sm" onchange="applyDateFilter(this.value)">
+                    </select>
                 <button onclick="addRow(); saveData()" class="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2 px-4 rounded-lg shadow transition duration-200 text-sm">+ 新增行程</button>
             </div>
+            
             <div id="split-actions" class="hidden flex space-x-2">
                 <button onclick="addExpense(); saveData()" class="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2 px-4 rounded-lg shadow text-sm">+ 登載支出</button>
                 <button onclick="togglePersonEditModal(); saveData()" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg shadow text-sm">👤 編輯人名</button>
@@ -151,7 +158,7 @@
                     <tfoot>
                         <tr class="bg-gradient-to-r from-blue-50 to-purple-50 text-base font-bold text-gray-800">
                             <td colspan="4" class="table-cell text-right py-4">總計:</td>
-                            <td id="totalEstimatedJpy" class="table-cell text-right py-4 text-red-600">0 JPY</td>
+                            <td id="totalEstimated" class="table-cell text-right py-4 text-red-600">0 JPY</td>
                             <td colspan="2" class="table-cell py-4"></td>
                         </tr>
                     </tfoot>
@@ -201,7 +208,7 @@
             authDomain: "japantravel-8e369.firebaseapp.com",
             databaseURL: "https://japantravel-8e369-default-rtdb.firebaseio.com",
             projectId: "japantravel-8e369",
-            storageBucket: "japantravel-8e369.appspot.com",
+            storageBucket: "japantravel-8e369.appBucket.com",
             messagingSenderId: "xxxxxxxxxxx",  
             appId: "1:xxxxxxxxxxx:web:xxxxxxxxxxxxxxxx"  
         };
@@ -216,6 +223,7 @@
         let itineraryData = [];
         let expenses = [];
         let currentPage = 'itinerary';
+        let currentFilterDate = 'all'; // 預設顯示全部
 
         // === 即時監聽資料 ===
         db.ref('/').on('value', (snapshot) => {
@@ -226,8 +234,10 @@
             EXCHANGE_RATE = data.rate || 22.50;
             document.getElementById('exchangeRate').value = EXCHANGE_RATE.toFixed(2);
             document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString('zh-TW');
+            
             if (currentPage === 'itinerary') renderTable();
             if (currentPage === 'split') renderSplitView();
+            
             calculateTotals();
             calculateAndRenderSettlement();
         });
@@ -248,7 +258,7 @@
             });
         }
 
-        // === 核心功能 ===
+        // === 輔助函數 ===
         function updateExchangeRate(rate) {
             EXCHANGE_RATE = rate;
             document.getElementById('exchangeRate').value = rate.toFixed(2);
@@ -277,6 +287,7 @@
             document.getElementById('itinerary-tab').className = pageName === 'itinerary' ? 'tab tab-active' : 'tab tab-inactive';
             document.getElementById('split-tab').className = pageName === 'split' ? 'tab tab-active' : 'tab tab-inactive';
             if (pageName === 'split') renderSplitView();
+            if (pageName === 'itinerary') renderTable();
         }
 
         /**
@@ -290,12 +301,34 @@
             return `${parts[1]}/${parts[2]}`; // MM/DD
         }
 
-        // === 行程表功能 (主要修改區域) ===
+        // === 日期篩選器功能 ===
+        function populateDateFilter() {
+            const select = document.getElementById('dateFilter');
+            
+            // 找出所有唯一的日期 (排除空值)，並按日期排序
+            const uniqueDates = [...new Set(itineraryData.map(item => item.day).filter(d => d && d.length === 10))].sort();
+            
+            let html = '<option value="all">全部日期</option>';
+            
+            uniqueDates.forEach(date => {
+                const isSelected = date === currentFilterDate ? 'selected' : '';
+                html += `<option value="${date}" ${isSelected}>${formatDate(date)}</option>`;
+            });
+
+            select.innerHTML = html;
+        }
+
+        function applyDateFilter(date) {
+            currentFilterDate = date;
+            renderTable();
+        }
+
+        // === 行程表功能 (自動排序核心) ===
         function renderTable() {
             const tbody = document.getElementById('itineraryBody');
             tbody.innerHTML = '';
             
-            // 根據日期和時間排序
+            // 1. 執行日期+時間的自動排序 (YYYY-MM-DDHH:MM)
             itineraryData.sort((a, b) => {
                 const dateTimeA = (a.day || '9999-12-31') + (a.time || '23:59');
                 const dateTimeB = (b.day || '9999-12-31') + (b.time || '23:59');
@@ -304,16 +337,18 @@
                 return 0;
             });
 
+            // 2. 過濾數據，同時保留原始索引
+            let filteredData = itineraryData.map((item, originalIndex) => ({ ...item, originalIndex })).filter(item => {
+                return currentFilterDate === 'all' || item.day === currentFilterDate;
+            });
 
-            itineraryData.forEach((item, index) => {
+            // 3. 渲染過濾後的數據
+            filteredData.forEach((item) => {
+                // 使用 originalIndex 確保 CRUD (編輯/刪除) 操作指向正確的原始數據
+                const dataIndex = item.originalIndex; 
+
                 const row = tbody.insertRow();
-                row.className = 'hover:bg-gray-50 smooth-transition cursor-move';
-                row.draggable = true;
-                row.ondragstart = (e) => handleDragStart(e, index);
-                row.ondragover = handleDragOver;
-                row.ondrop = (e) => handleDrop(e, index);
-                row.ondragenter = handleDragEnter;
-                row.ondragleave = handleDragLeave;
+                row.className = 'hover:bg-gray-50 smooth-transition';
 
                 const cells = [
                     { key: 'dateTime', editable: false, class: 'font-bold w-datetime' }, 
@@ -332,13 +367,13 @@
                         const url = item.mapLink || '';
                         const text = url && url !== 'https://maps.google.com' ? '🗺️ 查看' : '📍 設定';
                         cell.innerHTML = `
-                            <div class="flex items-center space-x-2">
-                                <a href="${url}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm ${url ? '' : 'text-gray-400 italic'}">${text}</a>
-                                <button onclick="startMapLinkEdit(${index})" class="p-1 hover:bg-blue-100 rounded-full">✏️</button>
+                            <div class="flex items-center space-x-2"> 
+                                <a href="${url}" target="_blank" class="text-blue-500 hover:text-blue-700 ${url ? '' : 'text-gray-400 italic'}">${text}</a>
+                                <button onclick="startMapLinkEdit(${dataIndex})" class="p-1 hover:bg-blue-100 rounded-full">✏️</button>
                             </div>
                         `;
                     } 
-                    // === 優化：日期/時間合併欄位 (MM/DD 顯示 + 24hr HH:MM) ===
+                    // === 日期/時間欄位 (MM/DD 顯示 + 24hr HH:MM) ===
                     else if (field.key === 'dateTime') {
                         const dateValue = item.day || new Date().toISOString().split('T')[0]; // YYYY-MM-DD
                         const timeValue = item.time || '09:30';
@@ -349,10 +384,10 @@
                                 <span class="text-sm font-bold text-gray-800 hover:bg-blue-50 rounded px-1">${formatDate(dateValue)}</span>
                                 <input type="date" value="${dateValue}" 
                                        class="absolute top-0 left-0 w-full h-1/2 opacity-0 cursor-pointer"
-                                       onchange="handleDateInput(${index}, this.value)">
+                                       onchange="handleDateInput(${dataIndex}, this.value)">
                                 <input type="time" value="${timeValue}" 
                                        class="w-full text-center focus:outline-none focus:ring-0 text-sm"
-                                       onchange="handleCellEdit(${index}, 'time', this.value, false)">
+                                       onchange="handleCellEdit(${dataIndex}, 'time', this.value, false)">
                             </div>
                         `;
                     }
@@ -362,69 +397,47 @@
                         
                         if (field.editable) {
                             cell.contentEditable = true;
-                            cell.onblur = (e) => handleCellEdit(index, field.key, e.target.innerText, field.budget);
+                            cell.onblur = (e) => handleCellEdit(dataIndex, field.key, e.target.innerText, field.budget);
                         }
                     }
                 });
 
                 const delCell = row.insertCell();
                 delCell.className = 'table-cell text-center';
-                delCell.innerHTML = `<button onclick="deleteRow(${index})" class="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50">🗑️</button>`;
+                delCell.innerHTML = `<button onclick="deleteRow(${dataIndex})" class="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50">🗑️</button>`;
             });
+            
+            // 4. 更新篩選器和總計
+            populateDateFilter(); 
             calculateTotals();
         }
         
-        // === 處理日期輸入 (變更日期後重新排序) ===
+        // === 資料操作函數 (使用正確的 index) ===
         function handleDateInput(index, dateValue) {
             itineraryData[index]['day'] = dateValue; 
             saveData();
-            // 重新渲染以更新顯示和排序
             renderTable();
         }
-
 
         function handleCellEdit(index, key, value, isBudget) {
             let parsed = isBudget ? parseInt(value.replace(/[^0-9]/g, '')) || 0 : value.trim();
             itineraryData[index][key] = parsed;
             saveData();
             
+            // 如果修改了時間或預算，需要重新排序/計算總計
             if (key === 'time' || isBudget) {
                 renderTable(); 
             }
         }
         
         function startMapLinkEdit(index) {
-            const row = document.querySelector(`#itineraryBody tr:nth-child(${index + 1})`);
-            const cell = row.cells[3]; 
-            const input = document.createElement('input');
-            input.type = 'url';
-            input.value = itineraryData[index].mapLink || '';
-            input.className = 'w-full p-1 border-2 border-blue-300 rounded';
-            input.placeholder = '貼上Google地圖連結';
-            input.onblur = () => {
-                itineraryData[index].mapLink = input.value;
+            const currentLink = itineraryData[index].mapLink || '';
+            const newLink = prompt('貼上Google地圖連結:', currentLink);
+            
+            if (newLink !== null) {
+                itineraryData[index].mapLink = newLink.trim();
                 saveData();
                 renderTable();
-            };
-            input.onkeypress = (e) => e.key === 'Enter' && input.blur();
-            cell.innerHTML = ''; 
-            cell.appendChild(input);
-            input.focus();
-        }
-
-        let draggedIndex = null;
-        function handleDragStart(e, index) { draggedIndex = index; e.target.classList.add('dragging'); }
-        function handleDragOver(e) { e.preventDefault(); }
-        function handleDragEnter(e) { e.target.closest('tr')?.classList.add('drag-over'); }
-        function handleDragLeave(e) { e.target.closest('tr')?.classList.remove('drag-over'); }
-        function handleDrop(e, targetIndex) {
-            e.preventDefault();
-            document.querySelectorAll('tr').forEach(tr => tr.classList.remove('dragging', 'drag-over'));
-            if (draggedIndex !== targetIndex) {
-                const [item] = itineraryData.splice(draggedIndex, 1);
-                itineraryData.splice(targetIndex, 0, item);
-                saveData();
-                renderTable(); 
             }
         }
 
@@ -443,6 +456,7 @@
                 notes: ""
             });
             saveData();
+            // 新增後會自動重新排序
             renderTable();
         }
 
@@ -453,10 +467,27 @@
                 renderTable();
             }
         }
-
+        
+        // === 更新 calculateTotals 函數，增加 TWD 換算 (保持不變) ===
         function calculateTotals() {
-            const totalEst = itineraryData.reduce((sum, i) => sum + (i.estimatedJpy || 0), 0);
-            document.getElementById('totalEstimatedJpy').textContent = `${totalEst.toLocaleString()} JPY`;
+            const dataToSum = currentFilterDate === 'all' 
+                ? itineraryData
+                : itineraryData.filter(item => item.day === currentFilterDate);
+
+            const totalEstJpy = dataToSum.reduce((sum, i) => sum + (i.estimatedJpy || 0), 0);
+            const totalEstTwd = Math.round(totalEstJpy * EXCHANGE_RATE); 
+            
+            // 總計文字調整以反映篩選狀態
+            const prefix = currentFilterDate === 'all' ? '總計' : `${formatDate(currentFilterDate)} 總計`;
+            document.querySelector('#itineraryTable tfoot tr td:first-child').textContent = `${prefix}:`;
+            
+            // 更新總計欄位，同時顯示 JPY 和 TWD
+            document.getElementById('totalEstimated').innerHTML = `
+                <div class="flex flex-col items-end">
+                    <span class="text-base font-bold text-red-600">${totalEstJpy.toLocaleString()} JPY</span>
+                    <span class="text-sm font-semibold text-gray-700">(${totalEstTwd.toLocaleString()} TWD)</span>
+                </div>
+            `;
         }
         
         // (分帳功能相關函數保持不變)
