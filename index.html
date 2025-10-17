@@ -35,29 +35,17 @@
         .currency-input::-webkit-outer-spin-button, .currency-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         .dragging { opacity: 0.7; transform: rotate(2deg); border: 2px dashed #3b82f6; }
         .drag-over { border-top: 2px solid #10b981; background-color: #f0fdf4 !important; }
-        #itineraryBody {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 1px;
-            background-color: #e5e7eb;
+        .modal {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 50;
         }
-        .itinerary-row {
-            background-color: white;
-            display: contents;
-        }
-        .itinerary-row > td {
-            padding: 12px;
-            border-bottom: 1px solid #e5e7eb;
-            vertical-align: top;
+        .modal-content {
+            background-color: white; margin: 15% auto; padding: 20px; border-radius: 8px; width: 90%; max-width: 500px; max-height: 70vh; overflow-y: auto;
         }
         @media (max-width: 768px) {
-            #itineraryBody {
-                grid-template-columns: 1fr; /* 手機單列 */
-            }
             .currency-input { width: 5rem !important; font-size: 14px; }
             .table-cell { padding: 8px 4px !important; font-size: 12px; }
             .tab { padding: 8px 12px !important; font-size: 14px; }
-            .itinerary-row > td { padding: 8px 4px; }
+            .modal-content { margin: 20% auto; }
         }
         .smooth-transition { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
     </style>
@@ -110,12 +98,7 @@
                             <th class="header-cell rounded-tl-xl w-16">日期</th>
                             <th class="header-cell w-20">時間</th>
                             <th class="header-cell w-48">地點</th>
-                            <th class="header-cell w-32">交通</th>
-                            <th class="header-cell w-28">地圖</th>
-                            <th class="header-cell w-32 text-right">✅ 已支出</th>
-                            <th class="header-cell w-32 text-right">💰 預算</th>
-                            <th class="header-cell w-32 text-right">台幣</th>
-                            <th class="header-cell w-48 rounded-tr-xl">備註</th>
+                            <th class="header-cell w-16 rounded-tr-xl">詳細</th>
                             <th class="header-cell w-16">🗑️</th>
                         </tr>
                     </thead>
@@ -124,11 +107,8 @@
                     </tbody>
                     <tfoot>
                         <tr class="bg-gradient-to-r from-blue-50 to-purple-50 text-base font-bold text-gray-800">
-                            <td colspan="5" class="table-cell text-right py-4">總計:</td>
-                            <td id="totalSpentJpy" class="table-cell text-right py-4 text-red-600">0 JPY</td>
-                            <td id="totalEstimatedJpy" class="table-cell text-right py-4 text-red-600">0 JPY</td>
-                            <td id="totalSpentTwd" class="table-cell text-right py-4 text-green-600">0 TWD</td>
-                            <td colspan="2" class="table-cell py-4"></td>
+                            <td colspan="3" class="table-cell text-right py-4">總計:</td>
+                            <td id="totalSpentJpy" class="table-cell text-right py-4 text-red-600" colspan="2">0 JPY</td>
                         </tr>
                     </tfoot>
                 </table>
@@ -160,6 +140,15 @@
             <div id="settlement-summary" class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6"></div>
             <h3 class="text-xl font-semibold text-gray-800 mb-3">🔄 轉帳清單 (誰該付誰)</h3>
             <div id="settlement-list" class="space-y-3 p-4 border rounded-lg bg-yellow-50 text-gray-800"></div>
+        </div>
+
+        <!-- Modal for Details -->
+        <div id="detailModal" class="modal">
+            <div class="modal-content">
+                <h3 class="text-lg font-semibold mb-4">行程詳細資訊</h3>
+                <div id="modalContent" class="space-y-2"></div>
+                <button onclick="closeModal()" class="mt-4 bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">關閉</button>
+            </div>
         </div>
     </div>
 
@@ -233,7 +222,7 @@
             
             itineraryData.forEach((item, index) => {
                 const row = document.createElement('tr');
-                row.className = 'itinerary-row hover:bg-gray-50 smooth-transition cursor-move';
+                row.className = 'hover:bg-gray-50 smooth-transition cursor-move';
                 row.dataset.index = index;
                 row.draggable = true;
                 row.addEventListener('dragstart', (e) => handleDragStart(e, index));
@@ -241,7 +230,6 @@
                 row.addEventListener('drop', (e) => handleDrop(e, index));
                 row.addEventListener('dragenter', handleDragEnter);
                 row.addEventListener('dragleave', handleDragLeave);
-                // 觸控事件支持
                 row.addEventListener('touchstart', (e) => handleTouchStart(e, index), { passive: true });
                 row.addEventListener('touchmove', handleTouchMove);
                 row.addEventListener('touchend', handleTouchEnd);
@@ -249,42 +237,25 @@
                 const cells = [
                     { key: 'day', editable: true, class: 'font-bold' },
                     { key: 'time', editable: true },
-                    { key: 'location', editable: true },
-                    { key: 'travelTime', editable: true },
-                    { key: 'mapLink', editable: false },
-                    { key: 'spentJpy', editable: true, budget: true, class: 'text-red-500 text-right' },
-                    { key: 'estimatedJpy', editable: true, budget: true, class: 'text-red-500 text-right' },
-                    { key: 'twd', computed: true, class: 'text-green-600 text-right font-mono' },
-                    { key: 'notes', editable: true }
+                    { key: 'location', editable: true }
                 ];
 
                 cells.forEach(field => {
                     const cell = document.createElement('td');
                     cell.className = `table-cell ${field.class || ''}`;
-                    
-                    if (field.key === 'mapLink') {
-                        const url = item.mapLink || '';
-                        const text = url && url !== 'https://maps.google.com' ? '🗺️ 查看' : '📍 設定';
-                        cell.innerHTML = `
-                            <div class="flex items-center space-x-2">
-                                <a href="${url}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm ${url ? '' : 'text-gray-400 italic'}">${text}</a>
-                                <button onclick="startMapLinkEdit(${index})" class="p-1 hover:bg-blue-100 rounded-full">✏️</button>
-                            </div>
-                        `;
-                    } else if (field.computed) {
-                        const twd = Math.round(item.spentJpy * EXCHANGE_RATE);
-                        cell.textContent = `${twd.toLocaleString()} TWD`;
-                    } else {
-                        let content = field.budget ? (item[field.key] || 0).toLocaleString() : item[field.key] || '';
-                        cell.textContent = content;
-                        
-                        if (field.editable) {
-                            cell.contentEditable = true;
-                            cell.onblur = (e) => handleCellEdit(index, field.key, e.target.innerText, field.budget);
-                        }
+                    let content = item[field.key] || '';
+                    cell.textContent = content;
+                    if (field.editable) {
+                        cell.contentEditable = true;
+                        cell.onblur = (e) => handleCellEdit(index, field.key, e.target.innerText);
                     }
                     row.appendChild(cell);
                 });
+
+                const detailCell = document.createElement('td');
+                detailCell.className = 'table-cell text-center';
+                detailCell.innerHTML = `<button onclick="showDetail(${index})" class="text-blue-500 hover:text-blue-700 p-2 rounded-full hover:bg-blue-50">📖</button>`;
+                row.appendChild(detailCell);
 
                 const delCell = document.createElement('td');
                 delCell.className = 'table-cell text-center';
@@ -296,30 +267,29 @@
             calculateTotals();
         }
 
-        function handleCellEdit(index, key, value, isBudget) {
-            let parsed = isBudget ? parseInt(value.replace(/[^0-9]/g, '')) || 0 : value.trim();
+        function handleCellEdit(index, key, value) {
+            let parsed = value.trim();
             itineraryData[index][key] = parsed;
             saveItinerary();
             renderTable();
         }
 
-        function startMapLinkEdit(index) {
-            const row = document.querySelector(`#itineraryBody tr:nth-child(${index + 1})`);
-            const cell = row.cells[4];
-            const input = document.createElement('input');
-            input.type = 'url';
-            input.value = itineraryData[index].mapLink || '';
-            input.className = 'w-full p-1 border-2 border-blue-300 rounded';
-            input.placeholder = '貼上Google地圖連結';
-            input.onblur = () => {
-                itineraryData[index].mapLink = input.value;
-                saveItinerary();
-                renderTable();
-            };
-            input.onkeypress = (e) => e.key === 'Enter' && input.blur();
-            cell.innerHTML = ''; 
-            cell.appendChild(input);
-            input.focus();
+        function showDetail(index) {
+            const item = itineraryData[index];
+            const modalContent = document.getElementById('modalContent');
+            modalContent.innerHTML = `
+                <p><strong>交通:</strong> ${item.travelTime || '-'}</p>
+                <p><strong>地圖:</strong> ${item.mapLink ? `<a href="${item.mapLink}" target="_blank" class="text-blue-500 hover:text-blue-700">查看地圖</a>` : '-'}</p>
+                <p><strong>已支出 (JPY):</strong> ${item.spentJpy.toLocaleString() || '0'}</p>
+                <p><strong>預算 (JPY):</strong> ${item.estimatedJpy.toLocaleString() || '0'}</p>
+                <p><strong>台幣 (TWD):</strong> ${Math.round(item.spentJpy * EXCHANGE_RATE).toLocaleString() || '0'}</p>
+                <p><strong>備註:</strong> ${item.notes || '-'}</p>
+            `;
+            document.getElementById('detailModal').style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('detailModal').style.display = 'none';
         }
 
         let draggedIndex = null;
@@ -359,19 +329,17 @@
             if (touchStartIndex === null) return;
             const touchY = e.touches[0].clientY;
             const deltaY = touchY - touchStartY;
-            const rows = Array.from(document.querySelectorAll('#itineraryBody .itinerary-row'));
+            const rows = Array.from(document.querySelectorAll('#itineraryBody tr'));
             const currentRow = rows[touchStartIndex];
             const rect = currentRow.getBoundingClientRect();
             const scrollThreshold = 50;
 
             if (deltaY > 0) {
-                // 向下拖曳
                 const nextRow = rows[touchStartIndex + 1];
                 if (nextRow && touchY > rect.bottom + scrollThreshold) {
                     handleTouchDrop(touchStartIndex, touchStartIndex + 1);
                 }
             } else if (deltaY < 0) {
-                // 向上拖曳
                 const prevRow = rows[touchStartIndex - 1];
                 if (prevRow && touchY < rect.top - scrollThreshold) {
                     handleTouchDrop(touchStartIndex, touchStartIndex - 1);
@@ -397,8 +365,7 @@
         function addRow() {
             const lastDay = itineraryData.length ? Math.max(...itineraryData.map(i => i.day)) : 1;
             itineraryData.push({
-                day: lastDay, time: "00:00", location: "新增地點", travelTime: "", 
-                mapLink: "", spentJpy: 0, estimatedJpy: 0, notes: ""
+                day: lastDay, time: "00:00", location: "新增地點", travelTime: "", mapLink: "", spentJpy: 0, estimatedJpy: 0, notes: ""
             });
             saveItinerary();
             renderTable();
@@ -422,10 +389,7 @@
 
         function calculateTotals() {
             const totalSpent = itineraryData.reduce((sum, i) => sum + (i.spentJpy || 0), 0);
-            const totalEst = itineraryData.reduce((sum, i) => sum + (i.estimatedJpy || 0), 0);
             document.getElementById('totalSpentJpy').textContent = `${totalSpent.toLocaleString()} JPY`;
-            document.getElementById('totalEstimatedJpy').textContent = `${totalEst.toLocaleString()} JPY`;
-            document.getElementById('totalSpentTwd').textContent = `${Math.round(totalSpent * EXCHANGE_RATE).toLocaleString()} TWD`;
         }
 
         function saveItinerary() { localStorage.setItem(ITINERARY_KEY, JSON.stringify(itineraryData)); }
