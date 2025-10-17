@@ -18,6 +18,7 @@
             outline: 2px solid #3b82f6;
             background-color: #eef2ff;
         }
+        /* 讓備註欄位的高度可以彈性撐開 */
         .table-cell { padding: 12px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-thumb { background-color: #9ca3af; border-radius: 10px; }
@@ -325,9 +326,6 @@
             latestDateObj.setMilliseconds(0);
             
             // 3. 取得新的分鐘數，並向上取整到最近的 15 分鐘間隔 (00, 15, 30, 45)
-            
-            // Math.ceil(46/15) * 15 = 4 * 15 = 60
-            // Math.ceil(37/15) * 15 = 3 * 15 = 45
             let roundedMinutes = Math.ceil(latestDateObj.getMinutes() / 15) * 15;
             
             // 重新設定分鐘數，讓 Date 物件處理溢位
@@ -407,7 +405,7 @@
             renderTable();
         }
 
-        // === 行程表功能 (更新渲染邏輯) ===
+        // === 行程表功能 (更新備註欄位) ===
         function renderTable() {
             const tbody = document.getElementById('itineraryBody');
             tbody.innerHTML = '';
@@ -444,7 +442,7 @@
                     { key: 'travelTime', editable: true },
                     { key: 'mapLink', editable: false },
                     { key: 'budgetInput', editable: false, budget: true, class: 'w-32 text-red-500 text-right' },
-                    { key: 'notes', editable: true }
+                    { key: 'notes', editable: true, isHtml: true } // 標記 notes 為 HTML 內容
                 ];
 
                 cells.forEach(field => {
@@ -487,7 +485,7 @@
                             </div>
                         `;
                     }
-                    // === 日期/時間欄位 (新增 step="900") ===
+                    // === 日期/時間欄位 ===
                     else if (field.key === 'dateTime') {
                         const dateValue = item.day || new Date().toISOString().split('T')[0]; // YYYY-MM-DD
                         const timeValue = item.time || '09:30';
@@ -506,13 +504,25 @@
                             </div>
                         `;
                     }
-                    else {
-                        let content = item[field.key] || '';
-                        cell.textContent = content;
+                    // === 備註欄位 (使用 innerHTML 讀取和 contenteditable="true") ===
+                    else if (field.key === 'notes') {
+                        let content = item[field.key] || '點擊編輯備註...';
+                        cell.innerHTML = content; // 使用 innerHTML 讓換行生效
                         
                         if (field.editable) {
                             cell.contentEditable = true;
-                            // 備註/地點/交通時間使用舊的編輯邏輯
+                            // 備註欄儲存整個 HTML 內容
+                            cell.onblur = (e) => handleCellEdit(dataIndex, field.key, e.target.innerHTML, true); 
+                        }
+                    }
+                    // === 其他欄位 (地點、交通) ===
+                    else {
+                        let content = item[field.key] || '';
+                        cell.textContent = content; // 使用 textContent 保持純文字
+                        
+                        if (field.editable) {
+                            cell.contentEditable = true;
+                            // 地點/交通時間使用純文字儲存
                             cell.onblur = (e) => handleCellEdit(dataIndex, field.key, e.target.innerText, false); 
                         }
                     }
@@ -528,7 +538,28 @@
             calculateTotals();
         }
         
-        // === 資料操作函數 ===
+        // === 資料操作函數 (更新 handleCellEdit) ===
+        
+        // 地點/交通/備註編輯
+        function handleCellEdit(index, key, value, isHtmlContent) {
+            let parsed = isHtmlContent ? value.trim() : value.trim(); 
+            
+            // 由於備註欄是 HTML，當 contenteditable 元素只有一個 <br> 時，會被視為空值。
+            // 這裡簡單處理，確保空內容儲存空字串。
+            if (isHtmlContent && (parsed === '<br>' || parsed === '<div><br></div>')) {
+                 parsed = '';
+            }
+
+            itineraryData[index][key] = parsed;
+            saveData();
+            
+            // 如果修改了日期或時間，需要重新渲染表格以確保排序正確
+            if (key === 'time' || key === 'day') {
+                renderTable(); 
+            }
+        }
+        
+        // ... (其他 CRUD 函數保持不變)
 
         function handleBudgetInput(index, value, currentCurrency) {
             // 即時更新轉換金額顯示 (不存檔)
@@ -564,17 +595,6 @@
             saveData();
             calculateTotals(); 
         }
-
-        // 地點/交通/備註編輯 (非預算欄位)
-        function handleCellEdit(index, key, value, isBudget) {
-            let parsed = value.trim(); 
-            itineraryData[index][key] = parsed;
-            saveData();
-            
-            if (key === 'time') {
-                renderTable(); 
-            }
-        }
         
         function handleDateInput(index, dateValue) {
             itineraryData[index]['day'] = dateValue; 
@@ -593,7 +613,7 @@
             }
         }
 
-        // **【更新】addRow 函數，使用 findLatestDateTime 取得最新的時間 (已考慮篩選器)**
+        // 新增行程函數 (已包含篩選器和 15 分鐘取整邏輯)
         function addRow() {
             const latestDateTime = findLatestDateTime();
 
@@ -605,7 +625,7 @@
                 mapLink: "", 
                 estimatedAmount: 0, 
                 estimatedCurrency: 'JPY', 
-                notes: ""
+                notes: "" // 預設為空，避免儲存非預期的 HTML
             });
             saveData();
             // 新增後會自動重新排序
@@ -620,7 +640,7 @@
             }
         }
         
-        // === 總計計算 (更新邏輯) ===
+        // === 總計計算 (保持不變) ===
         function calculateTotals() {
             const dataToSum = currentFilterDate === 'all' 
                 ? itineraryData
