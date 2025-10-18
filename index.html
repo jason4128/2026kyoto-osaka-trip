@@ -5,9 +5,39 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🇯🇵 京都大阪旅遊規劃 🏯 - 禪意協作版</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-database-compat.js"></script>
     
+    <script type="module">
+        // 模組化引入所需的函數
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
+        import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-database.js";
+
+        // === 您的 Firebase 配置 (已替換為您提供的真實配置) ===
+        const firebaseConfig = {
+            apiKey: "AIzaSyCOxm1LPBq5L9JdZH4gaS1b4DYGc6CME_o",
+            authDomain: "japantravel-8e369.firebaseapp.com",
+            databaseURL: "https://japantravel-8e369-default-rtdb.firebaseio.com",
+            projectId: "japantravel-8e369",
+            storageBucket: "japantravel-8e369.firebasestorage.app",
+            messagingSenderId: "473684537567",
+            appId: "1:473684537567:web:52b103a59e678bd478b96a",
+            measurementId: "G-BETXRCZPMH"
+        };
+        
+        // 初始化 Firebase App
+        const app = initializeApp(firebaseConfig);
+        // 取得 Realtime Database 實例
+        window.db = getDatabase(app); 
+        
+        // 將核心函數暴露到全局 window，供下方非 module 腳本使用
+        window.ref = ref;
+        window.onValue = onValue;
+        window.set = set;
+        window.firebaseConfig = firebaseConfig; // 暴露配置用於日誌記錄
+        
+        // 呼叫主邏輯函數
+        window.startAppLogic();
+    </script>
+
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/zh-tw.js"></script>
@@ -51,13 +81,12 @@
         }
         .tab-inactive { background-color: #f3f4f6; color: #78716c; border-top: 1px solid #e5e7eb; border-bottom: 1px solid #e5e7eb; } 
         
-        /* Flatpickr 樣式調整 */
-        /* 隱藏 flatpickr 創建的真實輸入框，只顯示 altInput */
+        /* Flatpickr 樣式調整 - 確保 altInput 顯示正常 */
         .flatpickr-input[data-input] {
             opacity: 0;
             position: absolute;
             pointer-events: none;
-            z-index: -1; /* 確保它不會覆蓋 altInput */
+            z-index: -1; 
         }
         
         .flatpickr-input {
@@ -100,7 +129,7 @@
             <h1 class="text-3xl font-bold text-gray-800 mb-2">🇯🇵 京都大阪4天3夜旅遊規劃 🏯</h1>
             <p class="text-rose-600 text-sm">✨ 自動排序行程 | 📅 日曆式日期選擇 | 即時分帳計算</p>
             <div class="flex items-center justify-between mt-2">
-                <span id="syncStatus" class="sync-status text-green-600 text-xs font-semibold">🟢 即時同步中</span>
+                <span id="syncStatus" class="sync-status text-green-600 text-xs font-semibold">🔴 正在連接...</span>
                 <span class="text-xs text-rose-500">最後更新: <span id="lastUpdate">--</span></span>
             </div>
         </header>
@@ -229,19 +258,6 @@
     </div>
 
     <script>
-        // === Firebase 配置 (請替換為您的實際配置) ===
-        const firebaseConfig = {
-            apiKey: "AIzaSyxxxxxxxxxxxxxxxxxxxx",
-            authDomain: "japantravel-8e369.firebaseapp.com",
-            databaseURL: "https://japantravel-8e369-default-rtdb.firebaseio.com",
-            projectId: "japantravel-8e369",
-            storageBucket: "japantravel-8e369.appspot.com",
-            messagingSenderId: "xxxxxxxxxxx",
-            appId: "1:xxxxxxxxxxx:web:xxxxxxxxxxxxxxxx"
-        };
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.database();
-
         // === 全域變數 ===
         let EXCHANGE_RATE = 22.50;
         const DEFAULT_PEOPLE = ['A君', 'B君', 'C君', 'D君', 'E君', 'F君'];
@@ -251,53 +267,148 @@
         let expenses = [];
         let wishlistData = [];
         let currentPage = 'itinerary';
-        let currentFilterDay = 'all'; // 追蹤當前選定的日期篩選器
+        let currentFilterDay = 'all'; 
 
-        // === 即時監聽資料 ===
-        db.ref('/').on('value', (snapshot) => {
-            const data = snapshot.val() || {};
-            itineraryData = data.itinerary || [];
-            expenses = data.expenses || [];
-            wishlistData = data.wishlist || []; 
-            PEOPLE = data.people || DEFAULT_PEOPLE;
-            EXCHANGE_RATE = data.rate || 22.50;
-            document.getElementById('exchangeRate').value = EXCHANGE_RATE.toFixed(2);
-            document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString('zh-TW');
+        // Firebase V9 模組化語法的全局變數（由 module 腳本設定）
+        let db; 
+        let ref;
+        let onValue;
+        let set;
+
+        // === 預設行程範本 (用於手動恢復) ===
+        const DEFAULT_ITINERARY = [
+            { day: "2026-03-20", time: "08:00", location: "抵達關西機場 (KIX)", travelTime: "機場快線", mapLink: "", estimatedAmount: 0, budgetCurrency: 'JPY', notes: "在機場購買 ICOCA/HARUKA" },
+            { day: "2026-03-20", time: "11:00", location: "京都：飯店 Check-in", travelTime: "電車/地鐵", mapLink: "", estimatedAmount: 0, budgetCurrency: 'JPY', notes: "先寄放行李，下午開始行程" },
+            { day: "2026-03-20", time: "14:00", location: "清水寺", travelTime: "公車", mapLink: "", estimatedAmount: 400, budgetCurrency: 'JPY', notes: "門票" },
+            { day: "2026-03-21", time: "09:30", location: "嵐山：竹林小徑", travelTime: "JR/嵐電", mapLink: "", estimatedAmount: 0, budgetCurrency: 'JPY', notes: "早點去避開人潮" },
+            { day: "2026-03-21", time: "12:30", location: "嵐山：午餐 (湯豆腐)", travelTime: "步行", mapLink: "", estimatedAmount: 3000, budgetCurrency: 'JPY', notes: "預計高價位午餐" },
+            { day: "2026-03-22", time: "10:00", location: "大阪城", travelTime: "JR", mapLink: "", estimatedAmount: 600, budgetCurrency: 'JPY', notes: "天守閣門票" },
+        ];
+
+
+        // 啟動應用程序邏輯的函數
+        window.startAppLogic = function() {
+            // 從 window 取得 module 腳本設置的 Firebase 變數
+            db = window.db; 
+            ref = window.ref;
+            onValue = window.onValue;
+            set = window.set;
             
-            if (currentPage === 'itinerary') {
-                renderDayFilter();
-                renderTable();
+            console.log("Firebase App 已初始化，Database URL:", window.firebaseConfig.databaseURL);
+            
+            // 開始監聽資料庫
+            startDataListener();
+
+            // 暴露手動恢復功能到控制台
+            window.restoreDefaultData = restoreDefaultData;
+        }
+
+        /**
+         * 🚨 手動恢復功能：在控制台輸入 window.restoreDefaultData() 即可執行
+         */
+        function restoreDefaultData() {
+            if (!confirm('🚨 警告：確定要覆蓋資料庫現有內容，並寫入預設的京阪行程範本嗎？')) {
+                return;
             }
-            if (currentPage === 'split') renderSplitView();
-            if (currentPage === 'wishlist') renderWishlistTable();
-            
-            calculateTotals(); // 計算整體總計
-            calculateAndRenderSettlement();
-        });
+            console.warn("正在將預設資料寫入 Firebase Realtime Database...");
 
-        // === 儲存資料 ===
+            set(ref(db, '/'), {
+                itinerary: DEFAULT_ITINERARY,
+                expenses: [],
+                wishlist: [],
+                people: PEOPLE,
+                rate: EXCHANGE_RATE
+            }).then(() => {
+                alert("✅ 預設資料寫入成功！請重新整理頁面。");
+                console.log("✅ 預設資料寫入成功，數據已同步。");
+            }).catch((error) => {
+                alert("❌ 寫入失敗，請檢查控制台。");
+                console.error("Firebase 寫入失敗:", error);
+            });
+        }
+
+
+        // === Realtime Database 監聽 (V9 語法 - 增強日誌記錄和初始化邏輯) ===
+        function startDataListener() {
+            onValue(ref(db, '/'), (snapshot) => {
+                const data = snapshot.val() || {};
+                
+                console.log("從 Firebase 讀取資料:", data);
+                console.log(`讀取到的行程數量: ${data.itinerary ? data.itinerary.length : 0}`);
+                
+                // === 關鍵修正：如果資料庫根路徑是空的，則使用預設值初始化 PEOPLE ===
+                // 這裡保留檢查，但由於資料已被覆寫，現在會讀取到不完整的 data
+                if (Object.keys(data).length === 0) {
+                    console.warn("資料庫根路徑為空，使用預設值進行初始化。");
+                    PEOPLE = DEFAULT_PEOPLE;
+                    EXCHANGE_RATE = 22.50;
+                    itineraryData = [];
+                    expenses = [];
+                    wishlistData = [];
+                } else {
+                    itineraryData = data.itinerary || [];
+                    expenses = data.expenses || [];
+                    wishlistData = data.wishlist || []; 
+                    PEOPLE = data.people || DEFAULT_PEOPLE;
+                    EXCHANGE_RATE = data.rate || 22.50;
+                }
+                
+                document.getElementById('exchangeRate').value = EXCHANGE_RATE.toFixed(2);
+                document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString('zh-TW');
+                
+                if (currentPage === 'itinerary') {
+                    renderDayFilter();
+                    renderTable();
+                }
+                if (currentPage === 'split') renderSplitView();
+                if (currentPage === 'wishlist') renderWishlistTable();
+                
+                calculateTotals(); 
+                calculateAndRenderSettlement();
+
+                document.getElementById('syncStatus').className = 'text-green-600 text-xs font-semibold';
+                document.getElementById('syncStatus').textContent = '🟢 即時同步中';
+            }, (error) => {
+                console.error("Firebase 數據監聽失敗 - 錯誤代碼:", error.code, "錯誤訊息:", error.message);
+                document.getElementById('syncStatus').className = 'text-red-600 text-xs font-semibold';
+                document.getElementById('syncStatus').textContent = `🔴 連線失敗 (${error.code})`;
+            });
+        }
+
+        // === 儲存資料 (V9 語法 - 🚨 增加安全檢查) ===
         function saveData() {
-            db.ref('/').set({
+            document.getElementById('syncStatus').className = 'text-gray-500 text-xs font-semibold';
+            document.getElementById('syncStatus').textContent = '🟡 同步中...';
+
+            const dataToSave = {
                 itinerary: itineraryData,
                 expenses: expenses,
                 wishlist: wishlistData,
                 people: PEOPLE,
                 rate: EXCHANGE_RATE
-            }).then(() => {
-                document.getElementById('syncStatus').className = 'text-green-600 text-xs font-semibold';
-                document.getElementById('syncStatus').textContent = '🟢 同步成功';
-            }).catch(() => {
+            };
+
+            // 🚨 安全檢查：如果行程列表太少，發出警告
+            if (itineraryData.length < 3) {
+                console.warn("🚨 警告：您正在儲存的行程列表項目少於 3 個。請確認您不是在儲存一個不完整的空白狀態。");
+                console.log("即將儲存的資料：", dataToSave);
+            }
+
+
+            set(ref(db, '/'), dataToSave).then(() => {
+                // 成功後狀態將由 onValue 監聽器更新
+            }).catch((error) => {
+                console.error("Firebase 寫入失敗:", error);
                 document.getElementById('syncStatus').className = 'text-red-600 text-xs font-semibold';
-                document.getElementById('syncStatus').textContent = '🔴 同步失敗';
+                document.getElementById('syncStatus').textContent = '🔴 寫入失敗 (請檢查控制台)';
             });
         }
 
-        // === 核心功能：行程表 ===
+        // === 核心功能：行程表 (修正 Flatpickr Locale 和手機兼容性) ===
 
         function renderDayFilter() {
             const filterSelect = document.getElementById('dayFilter');
             
-            // 找出所有不重複的日期 (YYYY-MM-DD 格式)
             const allDays = itineraryData
                 .map(item => item.day)
                 .filter(day => day && day.match(/^\d{4}-\d{2}-\d{2}$/)); 
@@ -306,14 +417,12 @@
 
             let options = '<option value="all">所有日期</option>';
             uniqueDays.forEach(day => {
-                // 顯示為 月/日
                 const displayDay = day.substring(5).replace('-', '/');
                 options += `<option value="${day}" ${day === currentFilterDay ? 'selected' : ''}>${displayDay}</option>`;
             });
             
             filterSelect.innerHTML = options;
 
-            // 如果當前篩選日期不存在於行程中，則重設為 'all'
             if (currentFilterDay !== 'all' && !uniqueDays.includes(currentFilterDay)) {
                 currentFilterDay = 'all';
                 filterSelect.value = 'all';
@@ -329,13 +438,11 @@
             const tbody = document.getElementById('itineraryBody');
             tbody.innerHTML = '';
             
-            // 1. 過濾資料
             const filteredData = itineraryData.filter(item => {
                 if (currentFilterDay === 'all') return true;
                 return item.day === currentFilterDay;
             });
             
-            // 2. 排序資料 (依據日期 + 時間)
             filteredData.sort((a, b) => {
                 const dateTimeA = (a.day || '9999-12-31') + (a.time || '23:59');
                 const dateTimeB = (b.day || '9999-12-31') + (b.time || '23:59');
@@ -385,34 +492,37 @@
                         
                         // Flatpickr 初始化 (使用 originalIndex)
                         setTimeout(() => {
-                            // 1. 日期選擇器 (修正: 使用 altInputClass 確保顯示 m/d 並套用樣式)
+                            // 1. 日期選擇器 
                             flatpickr(document.getElementById(`date-${originalIndex}`), {
-                                locale: 'zh-tw',
-                                dateFormat: "Y-m-d", // 儲存格式 (隱藏的)
+                                locale: 'zh', // 修正為 'zh'
+                                dateFormat: "Y-m-d", 
                                 defaultDate: dayValue.match(/^\d{4}-\d{2}-\d{2}$/) ? dayValue : null,
+                                
+                                disableMobile: true,
+                                
                                 altInput: true,
-                                altFormat: "m/d", // 顯示格式 (01/30)
-                                altInputClass: "flatpickr-input block text-base font-bold w-full mb-1", // 繼承原始樣式
+                                altFormat: "m/d", 
+                                altInputClass: "flatpickr-input block text-base font-bold w-full mb-1", 
                                 
                                 onChange: function(selectedDates, dateStr, instance) {
                                     itineraryData[originalIndex].day = dateStr;
                                     saveData();
-                                    renderTable(); // 重新渲染以觸發排序和篩選器更新
+                                    renderTable(); 
                                 }
                             });
                             
-                            // 2. 時間選擇器 (修正: 使用 altInput 強制顯示 24 小時制 14:00)
+                            // 2. 時間選擇器 
                             flatpickr(document.getElementById(`time-${originalIndex}`), {
-                                locale: 'zh-tw',
+                                locale: 'zh', // 修正為 'zh'
                                 enableTime: true,
                                 noCalendar: true,
-                                dateFormat: "H:i", // 儲存/內部格式 (14:00)
-                                time_24hr: true,
-                                defaultDate: timeValue,
                                 
+                                disableMobile: true,
+
+                                dateFormat: "H:i", 
                                 altInput: true,
-                                altFormat: "H:i", // 顯示格式 (強制 24 小時制)
-                                altInputClass: "flatpickr-input block text-sm text-gray-600 w-full", // 繼承原始樣式
+                                altFormat: "H:i", 
+                                altInputClass: "flatpickr-input block text-sm text-gray-600 w-full", 
 
                                 onChange: function(selectedDates, dateStr, instance) {
                                     itineraryData[originalIndex].time = dateStr;
@@ -423,7 +533,6 @@
                         }, 0); 
                         
                     } else if (field.key === 'estimatedJpy') {
-                        // 預算欄位 (包含金額和幣別選擇)
                         const amount = item.estimatedAmount || 0; 
                         const currency = item.budgetCurrency || 'JPY';
                         
@@ -475,52 +584,41 @@
                 delCell.innerHTML = `<button onclick="deleteRow(${originalIndex})" class="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50">🗑️</button>`;
             });
             
-            // 3. 計算總計
             calculateTotals(filteredData);
         }
 
-        // 新增行程 (智慧新增邏輯)
+        // ... (以下所有輔助函數保持不變) ...
+
         function addRow() {
             let newDay = new Date().toISOString().substring(0, 10);
             let newTime = "09:00";
             
-            // 1. 檢查是否有日期篩選
             if (currentFilterDay !== 'all' && currentFilterDay.match(/^\d{4}-\d{2}-\d{2}$/)) {
-                // 情況一：有特定日期篩選，使用篩選日期
                 newDay = currentFilterDay;
                 
-                // 找出該日期的所有活動 (必須有時間欄位)
                 const filteredItems = itineraryData.filter(item => item.day === newDay && item.time);
                 
-                // 2. 判斷新行程時間
                 if (filteredItems.length > 0) {
-                    // 找出當天最晚的時間字串
                     const maxTimeStr = filteredItems.reduce((max, item) => {
                         return (item.time > max) ? item.time : max;
                     }, "00:00");
                     
-                    // 計算新時間：最晚時間 + 30 分鐘
                     const [h, m] = maxTimeStr.split(':').map(Number);
                     
-                    // 使用 Date 物件計算時間滾動（例如 23:59 + 30 分鐘）
-                    // 這裡的日期只需用來計算時間滾動，不影響 day
-                    let tempDate = new Date(); // 使用任意日期
-                    tempDate.setFullYear(2000, 0, 1); // 確保日期是固定的
+                    let tempDate = new Date(); 
+                    tempDate.setFullYear(2000, 0, 1); 
                     tempDate.setHours(h);
                     tempDate.setMinutes(m + 30); 
                     
-                    // 格式化新時間回 HH:MM
                     const newH = String(tempDate.getHours()).padStart(2, '0');
                     const newM = String(tempDate.getMinutes()).padStart(2, '0');
                     newTime = `${newH}:${newM}`;
                     
                 } else {
-                    // 如果當天沒有活動，預設 09:00
                     newTime = "09:00";
                 }
                 
             } else {
-                // 情況二：篩選器為 'all'，使用最後一個行程的日期
                 if (itineraryData.length > 0) {
                     const lastItem = itineraryData.reduce((latest, current) => {
                         const latestDateTime = (latest.day || '0000-00-00') + (latest.time || '00:00');
@@ -586,6 +684,7 @@
         }
 
         function deleteRow(index) {
+            // 替換 alert 為確認模態視窗
             if (confirm('確定刪除此行程？')) {
                 itineraryData.splice(index, 1);
                 saveData();
@@ -607,7 +706,6 @@
                 return currency === 'TWD' ? Math.round(num / EXCHANGE_RATE) : num;
             };
 
-            // 計算所有數據的總計 (整體總計)
             itineraryData.forEach(item => {
                 const amount = item.estimatedAmount || 0;
                 const currency = item.budgetCurrency || 'JPY';
@@ -616,7 +714,6 @@
                 totalJpyAll += calculateJpyFromBudget(amount, currency);
             });
             
-            // 計算篩選後數據的總計 (當日總計)
             filteredData.forEach(item => {
                 const amount = item.estimatedAmount || 0;
                 const currency = item.budgetCurrency || 'JPY';
@@ -625,11 +722,9 @@
                 totalJpyFiltered += calculateJpyFromBudget(amount, currency);
             });
 
-            // 更新上方的整體總計
             document.getElementById('totalEstimatedJpy').textContent = `${totalJpyAll.toLocaleString()} JPY`;
             document.getElementById('totalEstimatedTwd').textContent = `${totalTwdAll.toLocaleString()} TWD`;
             
-            // 更新下方的篩選後總計
             document.getElementById('filteredTotalJpy').textContent = `${totalJpyFiltered.toLocaleString()} JPY`;
             document.getElementById('filteredTotalTwd').textContent = `${totalTwdFiltered.toLocaleString()} TWD`;
         }
@@ -653,7 +748,8 @@
             input.focus();
         }
 
-        // === 輔助功能與分頁控制 (保持不變) ===
+
+        // === 輔助功能與分頁控制 ===
         function showPage(pageName) {
             currentPage = pageName;
             
@@ -680,10 +776,13 @@
         }
 
         async function fetchExchangeRate() {
+             // 由於瀏覽器安全限制，無法在 Canvas 環境中直接呼叫外部 API，
+             // 所以這是一個提醒用戶手動輸入的訊息
              alert("無法自動更新匯率，請手動輸入！");
         }
 
-        // --- 待定清單功能 (為了精簡代碼，省略了非核心變動的實現，請確保您自己的代碼庫中是完整的) ---
+        // --- 待定清單功能 ---
+        
         function renderWishlistTable() {
             const tbody = document.getElementById('wishlistBody');
             tbody.innerHTML = '';
@@ -693,49 +792,460 @@
             wishlistData.forEach((item, index) => {
                 const row = tbody.insertRow();
                 row.id = `wish-${item.id}`;
-                row.className = 'hover:bg-gray-50';
+                row.className = 'hover:bg-gray-50 transition duration-150';
+
+                let cell = row.insertCell();
+                cell.className = 'p-3 table-cell w-16';
+                cell.innerHTML = createTypeSelect(item.id, item.type);
+
+                cell = row.insertCell();
+                cell.className = 'p-3 table-cell w-40';
+                cell.contentEditable = true;
+                cell.textContent = item.name || '新想法';
+                cell.onblur = (e) => handleWishlistCellEdit(item.id, 'name', e.target.innerText);
+
+                cell = row.insertCell();
+                cell.className = 'p-3 table-cell w-48';
+                const url = item.link || '';
+                const text = url ? '🔗 打開連結' : '📍 設定連結';
+                cell.innerHTML = `
+                    <div class="flex items-center space-x-2">
+                        <a href="${url}" target="_blank" class="text-rose-500 hover:text-rose-700 text-sm ${url ? '' : 'text-gray-400 italic'}">${text}</a>
+                        <button onclick="startWishlistLinkEdit('${item.id}', '${url}')" class="p-1 hover:bg-rose-100 rounded-full">✏️</button>
+                    </div>
+                `;
+
+                cell = row.insertCell();
+                cell.className = 'p-3 table-cell w-20 text-center';
+                cell.innerHTML = createPrioritySelect(item.id, item.priority);
+
+                cell = row.insertCell();
+                cell.className = 'p-3 table-cell w-32';
+                cell.innerHTML = createSuggestedBySelect(item.id, item.suggestedBy);
                 
-                // 這裡應該是 Wishlist 渲染邏輯，假設它是完整的
-                // 為了精簡，這裡省略了非核心變動的 Wishlist 渲染代碼
-                // 請確保您自己代碼庫中的這部分功能是完整的。
+                cell = row.insertCell();
+                cell.className = 'p-3 table-cell w-48';
+                cell.contentEditable = true;
+                cell.innerHTML = item.notes || '';
+                cell.onblur = (e) => handleWishlistCellEdit(item.id, 'notes', e.target.innerHTML, true);
+
+                cell = row.insertCell();
+                cell.className = 'p-3 table-cell w-16 text-center';
+                const voteCount = item.votes ? Object.keys(item.votes).length : 0;
+                cell.innerHTML = `<button onclick="handleVote('${item.id}')" class="text-xl ${voteCount > 0 ? 'text-red-500' : 'text-gray-300'} hover:text-red-400 transition duration-150">❤️ (${voteCount})</button>`;
+
+                cell = row.insertCell();
+                cell.className = 'p-3 table-cell w-16 text-center';
+                cell.innerHTML = `<button onclick="deleteWishlistItem('${item.id}')" class="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50">🗑️</button>`;
             });
         }
-        function handleWishlistCellEdit(id, key, value, isHtmlContent = false) { /* ... 保持不變 ... */ }
-        function addWishlistItem() { /* ... 保持不變 ... */ }
-        function deleteWishlistItem(id) { /* ... 保持不變 ... */ }
-        function handleVote(id) { /* ... 保持不變 ... */ }
-        function startWishlistLinkEdit(id, currentLink) { /* ... 保持不變 ... */ }
-        function createTypeSelect(id, current) { return '';} 
-        function createPrioritySelect(id, current) { return '';} 
-        function createSuggestedBySelect(id, current) { return '';} 
+
+        function handleWishlistCellEdit(id, key, value, isHtmlContent = false) { 
+            const index = wishlistData.findIndex(item => item.id === id);
+            if (index > -1) {
+                let parsed;
+                if (isHtmlContent) {
+                    parsed = value === '<br>' || value === '<div><br></div>' || value.trim() === '' ? '' : value;
+                } else {
+                    parsed = value.trim();
+                }
+                wishlistData[index][key] = parsed;
+                saveData();
+                renderWishlistTable(); 
+            }
+        }
+        
+        function addWishlistItem() { 
+            const newId = Date.now().toString(); 
+            
+            wishlistData.push({
+                id: newId,
+                type: '景點',
+                name: '新想法 (點此修改)',
+                link: '',
+                priority: 3, 
+                suggestedBy: PEOPLE[0] || 'A君',
+                notes: '',
+                votes: {} 
+            });
+            saveData();
+        }
+        
+        function deleteWishlistItem(id) {
+            // 替換 alert 為確認模態視窗
+            if (confirm('確定刪除此待定想法？')) {
+                wishlistData = wishlistData.filter(item => item.id !== id);
+                saveData();
+            }
+        }
+        
+        function handleVote(id) {
+            const index = wishlistData.findIndex(item => item.id === id);
+            if (index > -1) {
+                // 為了簡單化，假設第一個使用者 (PEOPLE[0]) 是當前操作者
+                const currentVoter = PEOPLE[0] || 'A君'; 
+                
+                if (!wishlistData[index].votes) {
+                    wishlistData[index].votes = {};
+                }
+                
+                if (wishlistData[index].votes[currentVoter]) {
+                    delete wishlistData[index].votes[currentVoter];
+                } else {
+                    wishlistData[index].votes[currentVoter] = true;
+                }
+                saveData();
+            }
+        }
+        
+        function startWishlistLinkEdit(id, currentLink) {
+            const row = document.getElementById(`wish-${id}`);
+            const cell = row.cells[2]; 
+            const input = document.createElement('input');
+            input.type = 'url';
+            input.value = currentLink || '';
+            input.className = 'w-full p-1 border-2 border-rose-300 rounded text-sm'; 
+            input.placeholder = '貼上Google地圖或網站連結';
+            input.onblur = () => {
+                const index = wishlistData.findIndex(item => item.id === id);
+                if (index > -1) {
+                    wishlistData[index].link = input.value;
+                    saveData();
+                    renderWishlistTable();
+                }
+            };
+            input.onkeypress = (e) => e.key === 'Enter' && input.blur();
+            cell.innerHTML = ''; 
+            cell.appendChild(input);
+            input.focus();
+        }
+        
+        function createTypeSelect(id, current) {
+            const types = ['景點', '美食', '購物', '交通', '住宿'];
+            let options = types.map(type => `<option value="${type}" ${current === type ? 'selected' : ''}>${type}</option>`).join('');
+            return `
+                <select onchange="handleWishlistCellEdit('${id}', 'type', this.value)" class="p-1 border rounded text-xs bg-white w-full">
+                    ${options}
+                </select>
+            `;
+        } 
+        
+        function createPrioritySelect(id, current) {
+            const priorities = [
+                { value: 1, label: '★ 必去' }, 
+                { value: 2, label: '★★ 建議' }, 
+                { value: 3, label: '★★★ 隨緣' }
+            ];
+            let options = priorities.map(p => `<option value="${p.value}" ${current == p.value ? 'selected' : ''}>${p.label}</option>`).join('');
+            return `
+                <select onchange="handleWishlistCellEdit('${id}', 'priority', parseInt(this.value))" class="p-1 border rounded text-xs bg-white w-full">
+                    ${options}
+                </select>
+            `;
+        } 
+        
+        function createSuggestedBySelect(id, current) {
+            let options = PEOPLE.map(person => `<option value="${person}" ${current === person ? 'selected' : ''}>${person}</option>`).join('');
+            return `
+                <select onchange="handleWishlistCellEdit('${id}', 'suggestedBy', this.value)" class="p-1 border rounded text-xs bg-white w-full">
+                    ${options}
+                </select>
+            `;
+        } 
 
 
-        // --- 分帳功能 (為了精簡代碼，省略了非核心變動的實現，請確保您自己的代碼庫中是完整的) ---
+        // --- 分帳功能 (修正：新增 Firebase 寫入邏輯) ---
         function renderSplitView() {
             const tbody = document.getElementById('expensesBody');
             tbody.innerHTML = '';
             
-            expenses.forEach(expense => {
-                // ... (分帳渲染邏輯，假設它是完整的) ...
+            // 1. 渲染支出登載表
+            expenses.forEach((expense, index) => {
+                const row = tbody.insertRow();
+                row.className = 'hover:bg-gray-50 transition duration-150';
+                
+                // 項目名稱
+                let cell = row.insertCell();
+                cell.className = 'p-3 table-cell w-48';
+                cell.contentEditable = true;
+                cell.textContent = expense.name || '新支出';
+                cell.onblur = (e) => updateExpenseField(expense.id, 'name', e.target.innerText);
+
+                // 金額輸入
+                cell = row.insertCell();
+                cell.className = 'p-3 table-cell w-40 text-right';
+                cell.innerHTML = `
+                    <input type="number" 
+                           value="${expense.amount || 0}" 
+                           min="0" 
+                           class="text-input block text-right font-semibold text-sm p-1 border-b w-full"
+                           oninput="handleAmountInput('${expense.id}', this.value)"
+                           onblur="finalizeAmountUpdate('${expense.id}', this.value)"
+                           placeholder="0">
+                `;
+                
+                // 幣別選擇
+                cell = row.insertCell();
+                cell.className = 'p-3 table-cell w-28';
+                cell.innerHTML = createCurrencySelect(expense.id, expense.currency);
+                
+                // 付款人
+                cell = row.insertCell();
+                cell.className = 'p-3 table-cell w-32';
+                cell.innerHTML = createPayerSelect(expense.id, expense.payer);
+                
+                // 台幣金額 (自動計算)
+                const twdEq = calculateTwdEquivalent(expense.amount, expense.currency);
+                cell = row.insertCell();
+                cell.className = 'p-3 table-cell w-40 text-right font-bold text-red-700';
+                cell.textContent = twdEq.toLocaleString() + ' TWD';
+                
+                // 刪除按鈕
+                cell = row.insertCell();
+                cell.className = 'p-3 table-cell w-16 text-center';
+                cell.innerHTML = `<button onclick="deleteExpense('${expense.id}')" class="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50">🗑️</button>`;
             });
+
+            // 2. 確保結算結果在渲染後更新
             setTimeout(() => calculateAndRenderSettlement(), 100);
         }
-        function handleAmountInput(id, value) { /* ... 保持不變 ... */ }
-        function finalizeAmountUpdate(id, value) { /* ... 保持不變 ... */ }
-        function createCurrencySelect(id, current) { return '';}
-        function createPayerSelect(id, current) { return '';}
-        function updateExpenseField(id, field, value) { /* ... 保持不變 ... */ }
+
         function calculateTwdEquivalent(amount, currency) {
             const num = parseFloat(amount) || 0;
             return currency === 'JPY' ? Math.round(num * EXCHANGE_RATE) : Math.round(num);
         }
-        function addExpense() { /* ... 保持不變 ... */ }
-        function deleteExpense(id) { /* ... 保持不變 ... */ }
-        function togglePersonEditModal() { /* ... 保持不變 ... */ }
-        function calculateAndRenderSettlement() { /* ... 保持不變 ... */ }
-        function renderSettlementSummary(totalTWD, sharePerPerson, netBalance) { /* ... 保持不變 ... */ }
-        function renderSettlementList(settlements) { /* ... 保持不變 ... */ }
-        function filterExpenses() { /* ... 保持不變 ... */ }
+
+        function handleAmountInput(id, value) {
+            const index = expenses.findIndex(e => e.id === id);
+            if (index > -1) {
+                expenses[index].amount = parseFloat(value) || 0;
+                // 僅在本機更新一次結算，提供即時回饋
+                calculateAndRenderSettlement();
+            }
+        }
+
+        function finalizeAmountUpdate(id, value) {
+            // 離開輸入框時才儲存到 Firebase
+            const index = expenses.findIndex(e => e.id === id);
+            if (index > -1) {
+                expenses[index].amount = parseFloat(value) || 0;
+                saveData();
+            }
+        }
+
+        function updateExpenseField(id, field, value) { 
+             const index = expenses.findIndex(e => e.id === id);
+            if (index > -1) {
+                expenses[index][field] = value.trim();
+                saveData();
+            }
+        }
+
+        function updateExpenseCurrency(id, currency) {
+            const index = expenses.findIndex(e => e.id === id);
+            if (index > -1) {
+                expenses[index].currency = currency;
+                saveData();
+            }
+        }
+
+        function createCurrencySelect(id, current) { 
+            return `
+                <select onchange="updateExpenseCurrency('${id}', this.value)" class="p-1 border rounded text-xs bg-white w-full">
+                    <option value="JPY" ${current === 'JPY' ? 'selected' : ''}>JPY</option>
+                    <option value="TWD" ${current === 'TWD' ? 'selected' : ''}>TWD</option>
+                </select>
+            `;
+        }
+
+        function updateExpensePayer(id, payer) {
+            const index = expenses.findIndex(e => e.id === id);
+            if (index > -1) {
+                expenses[index].payer = payer;
+                saveData();
+            }
+        }
+
+        function createPayerSelect(id, current) { 
+            const options = PEOPLE.map(person => `<option value="${person}" ${current === person ? 'selected' : ''}>${person}</option>`).join('');
+            return `
+                <select onchange="updateExpensePayer('${id}', this.value)" class="p-1 border rounded text-xs bg-white w-full">
+                    ${options}
+                </select>
+            `;
+        }
+        
+        function addExpense() { 
+            const newId = Date.now().toString(); 
+            expenses.push({
+                id: newId,
+                name: "午餐/車票",
+                amount: 0,
+                currency: 'JPY',
+                payer: PEOPLE[0] || 'A君', // 預設第一個付款人
+                participants: PEOPLE.reduce((acc, person) => ({ ...acc, [person]: true }), {}) // 預設所有人均攤
+            });
+            saveData();
+        }
+
+        function deleteExpense(id) { 
+            if (confirm('確定刪除此筆支出紀錄？')) {
+                expenses = expenses.filter(e => e.id !== id);
+                saveData();
+            }
+        }
+
+        function togglePersonEditModal() { 
+            const newNames = prompt("編輯參與人名單 (請用逗號分隔，例如: A君,B君,C君)", PEOPLE.join(','));
+            if (newNames !== null) {
+                // 過濾空字串並清除首尾空格
+                const newPeopleArray = newNames.split(',').map(name => name.trim()).filter(name => name);
+                
+                if (newPeopleArray.length > 0) {
+                    PEOPLE = newPeopleArray;
+                    
+                    // 由於人名變動，需要清除舊的參與人投票和分帳數據，以避免資料錯誤。
+                    expenses.forEach(e => {
+                         // 重新建立參與人列表，以確保使用新的人名
+                        e.participants = PEOPLE.reduce((acc, person) => ({ ...acc, [person]: true }), {});
+                    });
+                    
+                    // 儲存新的人名、更新費用列表和頁面
+                    saveData();
+                    if (currentPage === 'split') renderSplitView();
+                    alert("人名已更新！分帳項目中的參與人會被重設。");
+                } else {
+                    alert("人名不能為空。");
+                }
+            }
+        }
+
+        function calculateAndRenderSettlement() { 
+            const totalTWD = expenses.reduce((sum, e) => sum + calculateTwdEquivalent(e.amount, e.currency), 0);
+            const numPeople = PEOPLE.length;
+            const sharePerPerson = numPeople > 0 ? totalTWD / numPeople : 0;
+            
+            // 每個人的淨收支 (Paid - Share)
+            const netBalance = PEOPLE.reduce((acc, person) => {
+                acc[person] = 0;
+                return acc;
+            }, {});
+            
+            // 1. 計算每個人支付了多少 (Paid)
+            expenses.forEach(expense => {
+                const twdEq = calculateTwdEquivalent(expense.amount, expense.currency);
+                if (expense.payer && netBalance[expense.payer] !== undefined) {
+                    netBalance[expense.payer] += twdEq;
+                }
+            });
+
+            // 2. 扣除每個人應分攤的金額 (Share)
+            expenses.forEach(expense => {
+                const twdEq = calculateTwdEquivalent(expense.amount, expense.currency);
+                // 這裡簡化處理：假設所有人都參與，因為原代碼中沒有參與人選擇邏輯。
+                // 為了與原代碼結構保持一致，我將使用 PEOPLE 數組作為參與人
+                const participants = expense.participants ? Object.keys(expense.participants).filter(p => expense.participants[p] && PEOPLE.includes(p)) : PEOPLE;
+                const numParticipants = participants.length;
+                const sharePerExpense = numParticipants > 0 ? twdEq / numParticipants : 0;
+                
+                participants.forEach(person => {
+                    if (netBalance[person] !== undefined) {
+                        netBalance[person] -= sharePerExpense;
+                    }
+                });
+            });
+
+            // 3. 結算轉帳清單
+            let creditors = []; // 應收款 (淨餘額 > 0)
+            let debtors = [];   // 應付款 (淨餘額 < 0)
+
+            for (const person in netBalance) {
+                const balance = Math.round(netBalance[person]);
+                if (balance > 1) { // 避免四捨五入的極小誤差
+                    creditors.push({ name: person, amount: balance });
+                } else if (balance < -1) {
+                    debtors.push({ name: person, amount: Math.abs(balance) });
+                }
+            }
+
+            let settlements = [];
+            let i = 0, j = 0;
+
+            while (i < creditors.length && j < debtors.length) {
+                const creditor = creditors[i];
+                const debtor = debtors[j];
+                
+                // 找到較小的金額
+                const settlementAmount = Math.min(creditor.amount, debtor.amount);
+                
+                // 紀錄轉帳
+                settlements.push({
+                    from: debtor.name,
+                    to: creditor.name,
+                    amount: settlementAmount
+                });
+
+                // 更新餘額
+                creditor.amount -= settlementAmount;
+                debtor.amount -= settlementAmount;
+
+                // 移動指標
+                if (creditor.amount <= 1) i++; // 債權人已收清
+                if (debtor.amount <= 1) j++;   // 債務人已付清
+            }
+
+            // 渲染結果
+            renderSettlementSummary(totalTWD, sharePerPerson, netBalance);
+            renderSettlementList(settlements);
+        }
+
+        function renderSettlementSummary(totalTWD, sharePerPerson, netBalance) { 
+            const summaryDiv = document.getElementById('settlement-summary');
+            summaryDiv.innerHTML = `
+                <div class="bg-blue-100 p-4 rounded-lg shadow-md">
+                    <h3 class="font-bold text-lg text-blue-700">總計支出 (TWD)</h3>
+                    <p class="text-2xl font-extrabold text-blue-900">${totalTWD.toLocaleString()} TWD</p>
+                </div>
+                <div class="bg-yellow-100 p-4 rounded-lg shadow-md">
+                    <h3 class="font-bold text-lg text-yellow-700">每人應分攤金額</h3>
+                    <p class="text-2xl font-extrabold text-yellow-900">${Math.round(sharePerPerson).toLocaleString()} TWD</p>
+                </div>
+                <div class="bg-pink-100 p-4 rounded-lg shadow-md">
+                    <h3 class="font-bold text-lg text-pink-700">個人結餘狀況</h3>
+                    <ul class="text-sm font-semibold space-y-1">
+                        ${PEOPLE.map(person => {
+                            const balance = Math.round(netBalance[person] || 0);
+                            const color = balance > 0 ? 'text-green-600' : (balance < 0 ? 'text-red-600' : 'text-gray-600');
+                            const sign = balance > 0 ? '+' : '';
+                            return `<li>${person}: <span class="${color}">${sign}${balance.toLocaleString()} TWD</span></li>`;
+                        }).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+
+        function renderSettlementList(settlements) { 
+            const listDiv = document.getElementById('settlement-list');
+            if (settlements.length === 0) {
+                listDiv.innerHTML = '<p class="text-gray-500">✅ 目前收支已平衡，不需要轉帳！</p>';
+                return;
+            }
+            
+            listDiv.innerHTML = settlements.map(s => {
+                return `
+                    <div class="flex items-center justify-between p-2 bg-white rounded-md shadow-sm border-l-4 border-rose-400">
+                        <span class="text-sm font-medium">
+                            <strong class="text-red-600">${s.from}</strong> 應付給 
+                            <strong class="text-green-600">${s.to}</strong>
+                        </span>
+                        <span class="font-bold text-lg text-rose-800">${s.amount.toLocaleString()} TWD</span>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function filterExpenses() { }
+
 
         // === 初始化 ===
         window.onload = () => {
