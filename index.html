@@ -360,11 +360,11 @@
                     renderDayFilter();
                     renderTable();
                 }
-                if (currentPage === 'split') renderSplitView(); // 🚨 這裡需要完整的 renderSplitView
+                if (currentPage === 'split') renderSplitView(); 
                 if (currentPage === 'wishlist') renderWishlistTable();
                 
-                calculateTotals(); 
-                calculateAndRenderSettlement(); // 🚨 這裡需要完整的結算邏輯
+                calculateTotals(); // <--- 修正 3: 在數據讀取完畢後呼叫，它會同時計算全部與篩選後總計
+                calculateAndRenderSettlement(); 
 
                 document.getElementById('syncStatus').className = 'text-green-600 text-xs font-semibold';
                 document.getElementById('syncStatus').textContent = '🟢 即時同步中';
@@ -431,6 +431,7 @@
         function filterItinerary(selectedDay) {
             currentFilterDay = selectedDay;
             renderTable();
+            calculateTotals(); // <--- 修正 3: 切換篩選時也要立即更新總計
         }
 
         function renderTable() {
@@ -464,6 +465,8 @@
 
                 const row = tbody.insertRow();
                 row.className = 'hover:bg-gray-50 transition duration-150'; 
+                // === 修正 2: 增加 data-original-index 屬性來精確定位 ===
+                row.setAttribute('data-original-index', originalIndex); 
 
                 columns.forEach(field => {
                     const cell = row.insertCell();
@@ -577,7 +580,7 @@
                 delCell.innerHTML = `<button onclick="deleteRow(${originalIndex})" class="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50">🗑️</button>`;
             });
             
-            calculateTotals(filteredData);
+            // 修正 3: 這裡不呼叫 calculateTotals，讓 onValue 監聽器統一處理
         }
 
         // --- 行程表操作函數 (其餘保持不變) ---
@@ -682,12 +685,14 @@
             }
         }
         
-        function calculateTotals(filteredData = itineraryData) {
+        // --- 修正 3: 修正後的 calculateTotals 函數 (處理全部與篩選後的總計) ---
+        function calculateTotals() { // 不再需要參數
             let totalJpyAll = 0;
             let totalTwdAll = 0;
             let totalJpyFiltered = 0;
             let totalTwdFiltered = 0;
             
+            // 貨幣轉換函數
             const calculateTwdFromBudget = (amount, currency) => {
                 const num = parseInt(amount) || 0;
                 return currency === 'JPY' ? Math.round(num * EXCHANGE_RATE) : num;
@@ -697,32 +702,42 @@
                 return currency === 'TWD' ? Math.round(num / EXCHANGE_RATE) : num;
             };
 
+            // 遍歷所有行程資料
             itineraryData.forEach(item => {
                 const amount = item.estimatedAmount || 0;
                 const currency = item.budgetCurrency || 'JPY';
                 
+                // 1. 累計所有日期的總計 (給頂部的兩個總計框)
                 totalTwdAll += calculateTwdFromBudget(amount, currency);
                 totalJpyAll += calculateJpyFromBudget(amount, currency);
-            });
-            
-            filteredData.forEach(item => {
-                const amount = item.estimatedAmount || 0;
-                const currency = item.budgetCurrency || 'JPY';
                 
-                totalTwdFiltered += calculateTwdFromBudget(amount, currency);
-                totalJpyFiltered += calculateJpyFromBudget(amount, currency);
+                // 2. 累計篩選日期的總計 (給底部的表格腳註)
+                if (currentFilterDay === 'all' || item.day === currentFilterDay) {
+                    totalTwdFiltered += calculateTwdFromBudget(amount, currency);
+                    totalJpyFiltered += calculateJpyFromBudget(amount, currency);
+                }
             });
 
+            // 寫入總計 (頂部)
             document.getElementById('totalEstimatedJpy').textContent = `${totalJpyAll.toLocaleString()} JPY`;
             document.getElementById('totalEstimatedTwd').textContent = `${totalTwdAll.toLocaleString()} TWD`;
             
+            // 寫入篩選後總計 (底部表格腳註)
             document.getElementById('filteredTotalJpy').textContent = `${totalJpyFiltered.toLocaleString()} JPY`;
             document.getElementById('filteredTotalTwd').textContent = `${totalTwdFiltered.toLocaleString()} TWD`;
         }
 
+        // --- 修正 2: 修正後的 startMapLinkEdit 函數 (地圖跳格修正) ---
         function startMapLinkEdit(index) {
-            const row = document.querySelector(`#itineraryBody tr:nth-child(${itineraryData.findIndex(d => d === itineraryData[index]) + 1})`);
-            const cell = row.cells[3]; 
+            // === 修正 2: 使用 data-original-index 屬性來精確定位到正確的行，避免被篩選器和排序影響 ===
+            const row = document.querySelector(`#itineraryBody tr[data-original-index="${index}"]`);
+            
+            if (!row) {
+                console.error("錯誤：無法找到對應的行程項目行 (data-original-index:", index, ")");
+                return; // 安全退出
+            }
+            
+            const cell = row.cells[3]; // 地圖連結在第四欄 (index 3)
             const input = document.createElement('input');
             input.type = 'url';
             input.value = itineraryData[index].mapLink || '';
@@ -940,7 +955,7 @@
         } 
 
 
-        // --- 分帳功能 (🚨 完整的修復邏輯從這裡開始) ---
+        // --- 分帳功能 (修正 1: 完整的修復邏輯) ---
         function calculateTwdEquivalent(amount, currency) {
             const num = parseFloat(amount) || 0;
             return currency === 'JPY' ? Math.round(num * EXCHANGE_RATE) : Math.round(num);
