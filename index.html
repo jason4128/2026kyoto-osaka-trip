@@ -51,13 +51,12 @@
         }
         .tab-inactive { background-color: #f3f4f6; color: #78716c; border-top: 1px solid #e5e7eb; border-bottom: 1px solid #e5e7eb; } 
         
-        /* Flatpickr 樣式調整 */
-        /* 隱藏 flatpickr 創建的真實輸入框，只顯示 altInput */
+        /* Flatpickr 樣式調整 - 確保 altInput 顯示正常 */
         .flatpickr-input[data-input] {
             opacity: 0;
             position: absolute;
             pointer-events: none;
-            z-index: -1; /* 確保它不會覆蓋 altInput */
+            z-index: -1; 
         }
         
         .flatpickr-input {
@@ -229,9 +228,11 @@
     </div>
 
     <script>
-        // === Firebase 配置 (請替換為您的實際配置) ===
+        // ==========================================================
+        // === 請將以下 Firebase 配置替換為您自己的專案真實配置！ ===
+        // ==========================================================
         const firebaseConfig = {
-            apiKey: "AIzaSyxxxxxxxxxxxxxxxxxxxx",
+            apiKey: "AIzaSyxxxxxxxxxxxxxxxxxxxx", 
             authDomain: "japantravel-8e369.firebaseapp.com",
             databaseURL: "https://japantravel-8e369-default-rtdb.firebaseio.com",
             projectId: "japantravel-8e369",
@@ -241,6 +242,8 @@
         };
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
+        // ==========================================================
+
 
         // === 全域變數 ===
         let EXCHANGE_RATE = 22.50;
@@ -251,7 +254,7 @@
         let expenses = [];
         let wishlistData = [];
         let currentPage = 'itinerary';
-        let currentFilterDay = 'all'; // 追蹤當前選定的日期篩選器
+        let currentFilterDay = 'all'; 
 
         // === 即時監聽資料 ===
         db.ref('/').on('value', (snapshot) => {
@@ -271,12 +274,15 @@
             if (currentPage === 'split') renderSplitView();
             if (currentPage === 'wishlist') renderWishlistTable();
             
-            calculateTotals(); // 計算整體總計
+            calculateTotals(); 
             calculateAndRenderSettlement();
         });
 
         // === 儲存資料 ===
         function saveData() {
+            document.getElementById('syncStatus').className = 'text-gray-500 text-xs font-semibold';
+            document.getElementById('syncStatus').textContent = '🟡 同步中...';
+
             db.ref('/').set({
                 itinerary: itineraryData,
                 expenses: expenses,
@@ -286,18 +292,18 @@
             }).then(() => {
                 document.getElementById('syncStatus').className = 'text-green-600 text-xs font-semibold';
                 document.getElementById('syncStatus').textContent = '🟢 同步成功';
-            }).catch(() => {
+            }).catch((error) => {
+                console.error("Firebase 同步失敗:", error);
                 document.getElementById('syncStatus').className = 'text-red-600 text-xs font-semibold';
-                document.getElementById('syncStatus').textContent = '🔴 同步失敗';
+                document.getElementById('syncStatus').textContent = '🔴 同步失敗 (請檢查控制台)';
             });
         }
 
-        // === 核心功能：行程表 ===
+        // === 核心功能：行程表 (修正 Flatpickr Locale 和手機兼容性) ===
 
         function renderDayFilter() {
             const filterSelect = document.getElementById('dayFilter');
             
-            // 找出所有不重複的日期 (YYYY-MM-DD 格式)
             const allDays = itineraryData
                 .map(item => item.day)
                 .filter(day => day && day.match(/^\d{4}-\d{2}-\d{2}$/)); 
@@ -306,14 +312,12 @@
 
             let options = '<option value="all">所有日期</option>';
             uniqueDays.forEach(day => {
-                // 顯示為 月/日
                 const displayDay = day.substring(5).replace('-', '/');
                 options += `<option value="${day}" ${day === currentFilterDay ? 'selected' : ''}>${displayDay}</option>`;
             });
             
             filterSelect.innerHTML = options;
 
-            // 如果當前篩選日期不存在於行程中，則重設為 'all'
             if (currentFilterDay !== 'all' && !uniqueDays.includes(currentFilterDay)) {
                 currentFilterDay = 'all';
                 filterSelect.value = 'all';
@@ -329,13 +333,11 @@
             const tbody = document.getElementById('itineraryBody');
             tbody.innerHTML = '';
             
-            // 1. 過濾資料
             const filteredData = itineraryData.filter(item => {
                 if (currentFilterDay === 'all') return true;
                 return item.day === currentFilterDay;
             });
             
-            // 2. 排序資料 (依據日期 + 時間)
             filteredData.sort((a, b) => {
                 const dateTimeA = (a.day || '9999-12-31') + (a.time || '23:59');
                 const dateTimeB = (b.day || '9999-12-31') + (b.time || '23:59');
@@ -385,18 +387,19 @@
                         
                         // Flatpickr 初始化 (使用 originalIndex)
                         setTimeout(() => {
-                            // 1. 日期選擇器 (修正: 禁用原生手機輸入)
+                            // 1. 日期選擇器 
                             flatpickr(document.getElementById(`date-${originalIndex}`), {
-                                locale: 'zh-tw',
-                                dateFormat: "Y-m-d", // 儲存格式 (隱藏的)
+                                // *** 修正: 將 zh-tw 改為 zh ***
+                                locale: 'zh', 
+                                dateFormat: "Y-m-d", 
                                 defaultDate: dayValue.match(/^\d{4}-\d{2}-\d{2}$/) ? dayValue : null,
                                 
-                                // *** 關鍵修正：禁用手機原生輸入，確保 altFormat 生效 ***
+                                // *** 關鍵修正：禁用手機原生輸入 ***
                                 disableMobile: true,
                                 
                                 altInput: true,
-                                altFormat: "m/d", // 顯示格式 (01/30)
-                                altInputClass: "flatpickr-input block text-base font-bold w-full mb-1", // 繼承原始樣式
+                                altFormat: "m/d", 
+                                altInputClass: "flatpickr-input block text-base font-bold w-full mb-1", 
                                 
                                 onChange: function(selectedDates, dateStr, instance) {
                                     itineraryData[originalIndex].day = dateStr;
@@ -405,19 +408,20 @@
                                 }
                             });
                             
-                            // 2. 時間選擇器 (修正: 禁用原生手機輸入，強制 24 小時制)
+                            // 2. 時間選擇器 
                             flatpickr(document.getElementById(`time-${originalIndex}`), {
-                                locale: 'zh-tw',
+                                // *** 修正: 將 zh-tw 改為 zh ***
+                                locale: 'zh',
                                 enableTime: true,
                                 noCalendar: true,
                                 
-                                // *** 關鍵修正：禁用手機原生輸入，確保 altFormat 生效 ***
+                                // *** 關鍵修正：禁用手機原生輸入 ***
                                 disableMobile: true,
 
-                                dateFormat: "H:i", // 儲存/內部格式 (14:00)
+                                dateFormat: "H:i", 
                                 altInput: true,
-                                altFormat: "H:i", // 顯示格式 (強制 24 小時制)
-                                altInputClass: "flatpickr-input block text-sm text-gray-600 w-full", // 繼承原始樣式
+                                altFormat: "H:i", 
+                                altInputClass: "flatpickr-input block text-sm text-gray-600 w-full", 
 
                                 onChange: function(selectedDates, dateStr, instance) {
                                     itineraryData[originalIndex].time = dateStr;
@@ -428,7 +432,6 @@
                         }, 0); 
                         
                     } else if (field.key === 'estimatedJpy') {
-                        // 預算欄位 (包含金額和幣別選擇)
                         const amount = item.estimatedAmount || 0; 
                         const currency = item.budgetCurrency || 'JPY';
                         
@@ -480,52 +483,41 @@
                 delCell.innerHTML = `<button onclick="deleteRow(${originalIndex})" class="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50">🗑️</button>`;
             });
             
-            // 3. 計算總計
             calculateTotals(filteredData);
         }
 
-        // 新增行程 (智慧新增邏輯)
+        // ... (其餘行程表相關函式 addRow, handleBudgetAmountEdit, handleCellEdit, deleteRow, calculateTotals, startMapLinkEdit 保持不變) ...
+        
         function addRow() {
             let newDay = new Date().toISOString().substring(0, 10);
             let newTime = "09:00";
             
-            // 1. 檢查是否有日期篩選
             if (currentFilterDay !== 'all' && currentFilterDay.match(/^\d{4}-\d{2}-\d{2}$/)) {
-                // 情況一：有特定日期篩選，使用篩選日期
                 newDay = currentFilterDay;
                 
-                // 找出該日期的所有活動 (必須有時間欄位)
                 const filteredItems = itineraryData.filter(item => item.day === newDay && item.time);
                 
-                // 2. 判斷新行程時間
                 if (filteredItems.length > 0) {
-                    // 找出當天最晚的時間字串
                     const maxTimeStr = filteredItems.reduce((max, item) => {
                         return (item.time > max) ? item.time : max;
                     }, "00:00");
                     
-                    // 計算新時間：最晚時間 + 30 分鐘
                     const [h, m] = maxTimeStr.split(':').map(Number);
                     
-                    // 使用 Date 物件計算時間滾動（例如 23:59 + 30 分鐘）
-                    // 這裡的日期只需用來計算時間滾動，不影響 day
-                    let tempDate = new Date(); // 使用任意日期
-                    tempDate.setFullYear(2000, 0, 1); // 確保日期是固定的
+                    let tempDate = new Date(); 
+                    tempDate.setFullYear(2000, 0, 1); 
                     tempDate.setHours(h);
                     tempDate.setMinutes(m + 30); 
                     
-                    // 格式化新時間回 HH:MM
                     const newH = String(tempDate.getHours()).padStart(2, '0');
                     const newM = String(tempDate.getMinutes()).padStart(2, '0');
                     newTime = `${newH}:${newM}`;
                     
                 } else {
-                    // 如果當天沒有活動，預設 09:00
                     newTime = "09:00";
                 }
                 
             } else {
-                // 情況二：篩選器為 'all'，使用最後一個行程的日期
                 if (itineraryData.length > 0) {
                     const lastItem = itineraryData.reduce((latest, current) => {
                         const latestDateTime = (latest.day || '0000-00-00') + (latest.time || '00:00');
@@ -612,7 +604,6 @@
                 return currency === 'TWD' ? Math.round(num / EXCHANGE_RATE) : num;
             };
 
-            // 計算所有數據的總計 (整體總計)
             itineraryData.forEach(item => {
                 const amount = item.estimatedAmount || 0;
                 const currency = item.budgetCurrency || 'JPY';
@@ -621,7 +612,6 @@
                 totalJpyAll += calculateJpyFromBudget(amount, currency);
             });
             
-            // 計算篩選後數據的總計 (當日總計)
             filteredData.forEach(item => {
                 const amount = item.estimatedAmount || 0;
                 const currency = item.budgetCurrency || 'JPY';
@@ -630,11 +620,9 @@
                 totalJpyFiltered += calculateJpyFromBudget(amount, currency);
             });
 
-            // 更新上方的整體總計
             document.getElementById('totalEstimatedJpy').textContent = `${totalJpyAll.toLocaleString()} JPY`;
             document.getElementById('totalEstimatedTwd').textContent = `${totalTwdAll.toLocaleString()} TWD`;
             
-            // 更新下方的篩選後總計
             document.getElementById('filteredTotalJpy').textContent = `${totalJpyFiltered.toLocaleString()} JPY`;
             document.getElementById('filteredTotalTwd').textContent = `${totalTwdFiltered.toLocaleString()} TWD`;
         }
@@ -658,7 +646,8 @@
             input.focus();
         }
 
-        // === 輔助功能與分頁控制 (保持不變) ===
+
+        // === 輔助功能與分頁控制 ===
         function showPage(pageName) {
             currentPage = pageName;
             
@@ -688,7 +677,8 @@
              alert("無法自動更新匯率，請手動輸入！");
         }
 
-        // --- 待定清單功能 (略) ---
+        // --- 待定清單功能 ---
+        
         function renderWishlistTable() {
             const tbody = document.getElementById('wishlistBody');
             tbody.innerHTML = '';
@@ -698,20 +688,167 @@
             wishlistData.forEach((item, index) => {
                 const row = tbody.insertRow();
                 row.id = `wish-${item.id}`;
-                row.className = 'hover:bg-gray-50';
+                row.className = 'hover:bg-gray-50 transition duration-150';
+
+                let cell = row.insertCell();
+                cell.className = 'p-3 table-cell w-16';
+                cell.innerHTML = createTypeSelect(item.id, item.type);
+
+                cell = row.insertCell();
+                cell.className = 'p-3 table-cell w-40';
+                cell.contentEditable = true;
+                cell.textContent = item.name || '新想法';
+                cell.onblur = (e) => handleWishlistCellEdit(item.id, 'name', e.target.innerText);
+
+                cell = row.insertCell();
+                cell.className = 'p-3 table-cell w-48';
+                const url = item.link || '';
+                const text = url ? '🔗 打開連結' : '📍 設定連結';
+                cell.innerHTML = `
+                    <div class="flex items-center space-x-2">
+                        <a href="${url}" target="_blank" class="text-rose-500 hover:text-rose-700 text-sm ${url ? '' : 'text-gray-400 italic'}">${text}</a>
+                        <button onclick="startWishlistLinkEdit('${item.id}', '${url}')" class="p-1 hover:bg-rose-100 rounded-full">✏️</button>
+                    </div>
+                `;
+
+                cell = row.insertCell();
+                cell.className = 'p-3 table-cell w-20 text-center';
+                cell.innerHTML = createPrioritySelect(item.id, item.priority);
+
+                cell = row.insertCell();
+                cell.className = 'p-3 table-cell w-32';
+                cell.innerHTML = createSuggestedBySelect(item.id, item.suggestedBy);
+                
+                cell = row.insertCell();
+                cell.className = 'p-3 table-cell w-48';
+                cell.contentEditable = true;
+                cell.innerHTML = item.notes || '';
+                cell.onblur = (e) => handleWishlistCellEdit(item.id, 'notes', e.target.innerHTML, true);
+
+                cell = row.insertCell();
+                cell.className = 'p-3 table-cell w-16 text-center';
+                const voteCount = item.votes ? Object.keys(item.votes).length : 0;
+                cell.innerHTML = `<button onclick="handleVote('${item.id}')" class="text-xl ${voteCount > 0 ? 'text-red-500' : 'text-gray-300'} hover:text-red-400 transition duration-150">❤️ (${voteCount})</button>`;
+
+                cell = row.insertCell();
+                cell.className = 'p-3 table-cell w-16 text-center';
+                cell.innerHTML = `<button onclick="deleteWishlistItem('${item.id}')" class="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50">🗑️</button>`;
             });
         }
-        function handleWishlistCellEdit(id, key, value, isHtmlContent = false) { }
-        function addWishlistItem() { }
-        function deleteWishlistItem(id) { }
-        function handleVote(id) { }
-        function startWishlistLinkEdit(id, currentLink) { }
-        function createTypeSelect(id, current) { return '';} 
-        function createPrioritySelect(id, current) { return '';} 
-        function createSuggestedBySelect(id, current) { return '';} 
+
+        function handleWishlistCellEdit(id, key, value, isHtmlContent = false) { 
+            const index = wishlistData.findIndex(item => item.id === id);
+            if (index > -1) {
+                let parsed;
+                if (isHtmlContent) {
+                    parsed = value === '<br>' || value === '<div><br></div>' || value.trim() === '' ? '' : value;
+                } else {
+                    parsed = value.trim();
+                }
+                wishlistData[index][key] = parsed;
+                saveData();
+                renderWishlistTable(); 
+            }
+        }
+        
+        function addWishlistItem() { 
+            const newId = Date.now().toString(); 
+            
+            wishlistData.push({
+                id: newId,
+                type: '景點',
+                name: '新想法 (點此修改)',
+                link: '',
+                priority: 3, 
+                suggestedBy: PEOPLE[0] || 'A君',
+                notes: '',
+                votes: {} 
+            });
+            saveData();
+        }
+        
+        function deleteWishlistItem(id) {
+            if (confirm('確定刪除此待定想法？')) {
+                wishlistData = wishlistData.filter(item => item.id !== id);
+                saveData();
+            }
+        }
+        
+        function handleVote(id) {
+            const index = wishlistData.findIndex(item => item.id === id);
+            if (index > -1) {
+                const currentVoter = PEOPLE[0] || 'A君'; 
+                
+                if (!wishlistData[index].votes) {
+                    wishlistData[index].votes = {};
+                }
+                
+                if (wishlistData[index].votes[currentVoter]) {
+                    delete wishlistData[index].votes[currentVoter];
+                } else {
+                    wishlistData[index].votes[currentVoter] = true;
+                }
+                saveData();
+            }
+        }
+        
+        function startWishlistLinkEdit(id, currentLink) {
+            const row = document.getElementById(`wish-${id}`);
+            const cell = row.cells[2]; 
+            const input = document.createElement('input');
+            input.type = 'url';
+            input.value = currentLink || '';
+            input.className = 'w-full p-1 border-2 border-rose-300 rounded text-sm'; 
+            input.placeholder = '貼上Google地圖或網站連結';
+            input.onblur = () => {
+                const index = wishlistData.findIndex(item => item.id === id);
+                if (index > -1) {
+                    wishlistData[index].link = input.value;
+                    saveData();
+                    renderWishlistTable();
+                }
+            };
+            input.onkeypress = (e) => e.key === 'Enter' && input.blur();
+            cell.innerHTML = ''; 
+            cell.appendChild(input);
+            input.focus();
+        }
+        
+        function createTypeSelect(id, current) {
+            const types = ['景點', '美食', '購物', '交通', '住宿'];
+            let options = types.map(type => `<option value="${type}" ${current === type ? 'selected' : ''}>${type}</option>`).join('');
+            return `
+                <select onchange="handleWishlistCellEdit('${id}', 'type', this.value)" class="p-1 border rounded text-xs bg-white w-full">
+                    ${options}
+                </select>
+            `;
+        } 
+        
+        function createPrioritySelect(id, current) {
+            const priorities = [
+                { value: 1, label: '★ 必去' }, 
+                { value: 2, label: '★★ 建議' }, 
+                { value: 3, label: '★★★ 隨緣' }
+            ];
+            let options = priorities.map(p => `<option value="${p.value}" ${current == p.value ? 'selected' : ''}>${p.label}</option>`).join('');
+            return `
+                <select onchange="handleWishlistCellEdit('${id}', 'priority', parseInt(this.value))" class="p-1 border rounded text-xs bg-white w-full">
+                    ${options}
+                </select>
+            `;
+        } 
+        
+        function createSuggestedBySelect(id, current) {
+            let options = PEOPLE.map(person => `<option value="${person}" ${current === person ? 'selected' : ''}>${person}</option>`).join('');
+            return `
+                <select onchange="handleWishlistCellEdit('${id}', 'suggestedBy', this.value)" class="p-1 border rounded text-xs bg-white w-full">
+                    ${options}
+                </select>
+            `;
+        } 
 
 
-        // --- 分帳功能 (略) ---
+        // --- 分帳功能 (略，保持原樣) ---
         function renderSplitView() {
             const tbody = document.getElementById('expensesBody');
             tbody.innerHTML = '';
@@ -736,6 +873,7 @@
         function renderSettlementSummary(totalTWD, sharePerPerson, netBalance) { }
         function renderSettlementList(settlements) { }
         function filterExpenses() { }
+
 
         // === 初始化 ===
         window.onload = () => {
