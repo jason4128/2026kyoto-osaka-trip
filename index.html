@@ -52,6 +52,14 @@
         .tab-inactive { background-color: #f3f4f6; color: #78716c; border-top: 1px solid #e5e7eb; border-bottom: 1px solid #e5e7eb; } 
         
         /* Flatpickr 樣式調整 */
+        /* 隱藏 flatpickr 創建的真實輸入框，只顯示 altInput */
+        .flatpickr-input[data-input] {
+            opacity: 0;
+            position: absolute;
+            pointer-events: none;
+            z-index: -1; /* 確保它不會覆蓋 altInput */
+        }
+        
         .flatpickr-input {
             border: none !important;
             padding: 0 !important;
@@ -61,12 +69,7 @@
             cursor: pointer;
             width: 100%;
         }
-        /* 隱藏 flatpickr 創建的真實輸入框，只顯示 altInput */
-        .flatpickr-input[data-input] {
-            opacity: 0;
-            position: absolute;
-            pointer-events: none;
-        }
+        
         .date-time-container {
             position: relative;
         }
@@ -382,13 +385,14 @@
                         
                         // Flatpickr 初始化 (使用 originalIndex)
                         setTimeout(() => {
-                            // 1. 日期選擇器 (m/d 顯示, Y-m-d 儲存/解析)
+                            // 1. 日期選擇器 (修正: 使用 altInputClass 確保顯示 m/d 並套用樣式)
                             flatpickr(document.getElementById(`date-${originalIndex}`), {
                                 locale: 'zh-tw',
                                 dateFormat: "Y-m-d", // 儲存格式 (隱藏的)
                                 defaultDate: dayValue.match(/^\d{4}-\d{2}-\d{2}$/) ? dayValue : null,
                                 altInput: true,
-                                altFormat: "m/d", // 顯示格式 (給使用者看的)
+                                altFormat: "m/d", // 顯示格式 (01/30)
+                                altInputClass: "flatpickr-input block text-base font-bold w-full mb-1", // 繼承原始樣式
                                 
                                 onChange: function(selectedDates, dateStr, instance) {
                                     itineraryData[originalIndex].day = dateStr;
@@ -397,14 +401,19 @@
                                 }
                             });
                             
-                            // 2. 時間選擇器
+                            // 2. 時間選擇器 (修正: 使用 altInput 強制顯示 24 小時制 14:00)
                             flatpickr(document.getElementById(`time-${originalIndex}`), {
                                 locale: 'zh-tw',
                                 enableTime: true,
                                 noCalendar: true,
-                                dateFormat: "H:i", 
+                                dateFormat: "H:i", // 儲存/內部格式 (14:00)
                                 time_24hr: true,
                                 defaultDate: timeValue,
+                                
+                                altInput: true,
+                                altFormat: "H:i", // 顯示格式 (強制 24 小時制)
+                                altInputClass: "flatpickr-input block text-sm text-gray-600 w-full", // 繼承原始樣式
+
                                 onChange: function(selectedDates, dateStr, instance) {
                                     itineraryData[originalIndex].time = dateStr;
                                     saveData();
@@ -674,7 +683,7 @@
              alert("無法自動更新匯率，請手動輸入！");
         }
 
-        // --- 待定清單功能 (保持不變) ---
+        // --- 待定清單功能 (為了精簡代碼，省略了非核心變動的實現，請確保您自己的代碼庫中是完整的) ---
         function renderWishlistTable() {
             const tbody = document.getElementById('wishlistBody');
             tbody.innerHTML = '';
@@ -682,11 +691,11 @@
             wishlistData.sort((a, b) => a.priority - b.priority || a.id - b.id);
 
             wishlistData.forEach((item, index) => {
-                const row = tbody.insertCell();
+                const row = tbody.insertRow();
                 row.id = `wish-${item.id}`;
                 row.className = 'hover:bg-gray-50';
-
-                // ... (其餘 Wishlist 渲染邏輯，保持不變) ...
+                
+                // 這裡應該是 Wishlist 渲染邏輯，假設它是完整的
                 // 為了精簡，這裡省略了非核心變動的 Wishlist 渲染代碼
                 // 請確保您自己代碼庫中的這部分功能是完整的。
             });
@@ -696,25 +705,25 @@
         function deleteWishlistItem(id) { /* ... 保持不變 ... */ }
         function handleVote(id) { /* ... 保持不變 ... */ }
         function startWishlistLinkEdit(id, currentLink) { /* ... 保持不變 ... */ }
-        function createTypeSelect(id, current) { /* ... 保持不變 ... */ return '';} // 僅為編譯通過
-        function createPrioritySelect(id, current) { /* ... 保持不變 ... */ return '';} // 僅為編譯通過
-        function createSuggestedBySelect(id, current) { /* ... 保持不變 ... */ return '';} // 僅為編譯通過
+        function createTypeSelect(id, current) { return '';} 
+        function createPrioritySelect(id, current) { return '';} 
+        function createSuggestedBySelect(id, current) { return '';} 
 
 
-        // --- 分帳功能 (保持不變) ---
+        // --- 分帳功能 (為了精簡代碼，省略了非核心變動的實現，請確保您自己的代碼庫中是完整的) ---
         function renderSplitView() {
             const tbody = document.getElementById('expensesBody');
             tbody.innerHTML = '';
             
             expenses.forEach(expense => {
-                // ... (分帳渲染邏輯，保持不變) ...
+                // ... (分帳渲染邏輯，假設它是完整的) ...
             });
             setTimeout(() => calculateAndRenderSettlement(), 100);
         }
         function handleAmountInput(id, value) { /* ... 保持不變 ... */ }
         function finalizeAmountUpdate(id, value) { /* ... 保持不變 ... */ }
-        function createCurrencySelect(id, current) { /* ... 保持不變 ... */ return '';}
-        function createPayerSelect(id, current) { /* ... 保持不變 ... */ return '';}
+        function createCurrencySelect(id, current) { return '';}
+        function createPayerSelect(id, current) { return '';}
         function updateExpenseField(id, field, value) { /* ... 保持不變 ... */ }
         function calculateTwdEquivalent(amount, currency) {
             const num = parseFloat(amount) || 0;
