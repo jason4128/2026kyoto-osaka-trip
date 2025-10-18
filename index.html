@@ -385,13 +385,15 @@
                         
                         // Flatpickr 初始化 (使用 originalIndex)
                         setTimeout(() => {
-                            // 1. 日期選擇器 (修正: 移除 YYYY 顯示，只顯示 MM/DD)
+                            // 1. 日期選擇器 (修正: 禁用原生手機輸入)
                             flatpickr(document.getElementById(`date-${originalIndex}`), {
                                 locale: 'zh-tw',
                                 dateFormat: "Y-m-d", // 儲存格式 (隱藏的)
                                 defaultDate: dayValue.match(/^\d{4}-\d{2}-\d{2}$/) ? dayValue : null,
                                 
-                                // *** 關鍵修正：確保顯示 m/d 且樣式正確 ***
+                                // *** 關鍵修正：禁用手機原生輸入，確保 altFormat 生效 ***
+                                disableMobile: true,
+                                
                                 altInput: true,
                                 altFormat: "m/d", // 顯示格式 (01/30)
                                 altInputClass: "flatpickr-input block text-base font-bold w-full mb-1", // 繼承原始樣式
@@ -403,13 +405,15 @@
                                 }
                             });
                             
-                            // 2. 時間選擇器 (修正: 強制使用 H:i 24 小時制，移除 time_24hr 屬性)
+                            // 2. 時間選擇器 (修正: 禁用原生手機輸入，強制 24 小時制)
                             flatpickr(document.getElementById(`time-${originalIndex}`), {
                                 locale: 'zh-tw',
                                 enableTime: true,
                                 noCalendar: true,
                                 
-                                // *** 關鍵修正：強制 24 小時制顯示 ***
+                                // *** 關鍵修正：禁用手機原生輸入，確保 altFormat 生效 ***
+                                disableMobile: true,
+
                                 dateFormat: "H:i", // 儲存/內部格式 (14:00)
                                 altInput: true,
                                 altFormat: "H:i", // 顯示格式 (強制 24 小時制)
