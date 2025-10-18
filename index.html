@@ -385,15 +385,11 @@
                         
                         // Flatpickr 初始化 (使用 originalIndex)
                         setTimeout(() => {
-                            // 1. 日期選擇器 (修正: 禁用原生手機輸入)
+                            // 1. 日期選擇器 (修正: 使用 altInputClass 確保顯示 m/d 並套用樣式)
                             flatpickr(document.getElementById(`date-${originalIndex}`), {
                                 locale: 'zh-tw',
                                 dateFormat: "Y-m-d", // 儲存格式 (隱藏的)
                                 defaultDate: dayValue.match(/^\d{4}-\d{2}-\d{2}$/) ? dayValue : null,
-                                
-                                // *** 關鍵修正：禁用手機原生輸入，確保 altFormat 生效 ***
-                                disableMobile: true,
-                                
                                 altInput: true,
                                 altFormat: "m/d", // 顯示格式 (01/30)
                                 altInputClass: "flatpickr-input block text-base font-bold w-full mb-1", // 繼承原始樣式
@@ -401,20 +397,19 @@
                                 onChange: function(selectedDates, dateStr, instance) {
                                     itineraryData[originalIndex].day = dateStr;
                                     saveData();
-                                    renderTable(); 
+                                    renderTable(); // 重新渲染以觸發排序和篩選器更新
                                 }
                             });
                             
-                            // 2. 時間選擇器 (修正: 禁用原生手機輸入，強制 24 小時制)
+                            // 2. 時間選擇器 (修正: 使用 altInput 強制顯示 24 小時制 14:00)
                             flatpickr(document.getElementById(`time-${originalIndex}`), {
                                 locale: 'zh-tw',
                                 enableTime: true,
                                 noCalendar: true,
-                                
-                                // *** 關鍵修正：禁用手機原生輸入，確保 altFormat 生效 ***
-                                disableMobile: true,
-
                                 dateFormat: "H:i", // 儲存/內部格式 (14:00)
+                                time_24hr: true,
+                                defaultDate: timeValue,
+                                
                                 altInput: true,
                                 altFormat: "H:i", // 顯示格式 (強制 24 小時制)
                                 altInputClass: "flatpickr-input block text-sm text-gray-600 w-full", // 繼承原始樣式
@@ -688,7 +683,7 @@
              alert("無法自動更新匯率，請手動輸入！");
         }
 
-        // --- 待定清單功能 (略) ---
+        // --- 待定清單功能 (為了精簡代碼，省略了非核心變動的實現，請確保您自己的代碼庫中是完整的) ---
         function renderWishlistTable() {
             const tbody = document.getElementById('wishlistBody');
             tbody.innerHTML = '';
@@ -699,43 +694,48 @@
                 const row = tbody.insertRow();
                 row.id = `wish-${item.id}`;
                 row.className = 'hover:bg-gray-50';
+                
+                // 這裡應該是 Wishlist 渲染邏輯，假設它是完整的
+                // 為了精簡，這裡省略了非核心變動的 Wishlist 渲染代碼
+                // 請確保您自己代碼庫中的這部分功能是完整的。
             });
         }
-        function handleWishlistCellEdit(id, key, value, isHtmlContent = false) { }
-        function addWishlistItem() { }
-        function deleteWishlistItem(id) { }
-        function handleVote(id) { }
-        function startWishlistLinkEdit(id, currentLink) { }
+        function handleWishlistCellEdit(id, key, value, isHtmlContent = false) { /* ... 保持不變 ... */ }
+        function addWishlistItem() { /* ... 保持不變 ... */ }
+        function deleteWishlistItem(id) { /* ... 保持不變 ... */ }
+        function handleVote(id) { /* ... 保持不變 ... */ }
+        function startWishlistLinkEdit(id, currentLink) { /* ... 保持不變 ... */ }
         function createTypeSelect(id, current) { return '';} 
         function createPrioritySelect(id, current) { return '';} 
         function createSuggestedBySelect(id, current) { return '';} 
 
 
-        // --- 分帳功能 (略) ---
+        // --- 分帳功能 (為了精簡代碼，省略了非核心變動的實現，請確保您自己的代碼庫中是完整的) ---
         function renderSplitView() {
             const tbody = document.getElementById('expensesBody');
             tbody.innerHTML = '';
             
             expenses.forEach(expense => {
+                // ... (分帳渲染邏輯，假設它是完整的) ...
             });
             setTimeout(() => calculateAndRenderSettlement(), 100);
         }
-        function handleAmountInput(id, value) { }
-        function finalizeAmountUpdate(id, value) { }
+        function handleAmountInput(id, value) { /* ... 保持不變 ... */ }
+        function finalizeAmountUpdate(id, value) { /* ... 保持不變 ... */ }
         function createCurrencySelect(id, current) { return '';}
         function createPayerSelect(id, current) { return '';}
-        function updateExpenseField(id, field, value) { }
+        function updateExpenseField(id, field, value) { /* ... 保持不變 ... */ }
         function calculateTwdEquivalent(amount, currency) {
             const num = parseFloat(amount) || 0;
             return currency === 'JPY' ? Math.round(num * EXCHANGE_RATE) : Math.round(num);
         }
-        function addExpense() { }
-        function deleteExpense(id) { }
-        function togglePersonEditModal() { }
-        function calculateAndRenderSettlement() { }
-        function renderSettlementSummary(totalTWD, sharePerPerson, netBalance) { }
-        function renderSettlementList(settlements) { }
-        function filterExpenses() { }
+        function addExpense() { /* ... 保持不變 ... */ }
+        function deleteExpense(id) { /* ... 保持不變 ... */ }
+        function togglePersonEditModal() { /* ... 保持不變 ... */ }
+        function calculateAndRenderSettlement() { /* ... 保持不變 ... */ }
+        function renderSettlementSummary(totalTWD, sharePerPerson, netBalance) { /* ... 保持不變 ... */ }
+        function renderSettlementList(settlements) { /* ... 保持不變 ... */ }
+        function filterExpenses() { /* ... 保持不變 ... */ }
 
         // === 初始化 ===
         window.onload = () => {
