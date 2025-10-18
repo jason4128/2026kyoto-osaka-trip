@@ -11,7 +11,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
         import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-database.js";
 
-        // === 您的 Firebase 配置 (已替換為您提供的真實配置) ===
+        // === 您的 Firebase 配置 (請保持與您後台一致) ===
         const firebaseConfig = {
             apiKey: "AIzaSyCOxm1LPBq5L9JdZH4gaS1b4DYGc6CME_o",
             authDomain: "japantravel-8e369.firebaseapp.com",
@@ -28,11 +28,11 @@
         // 取得 Realtime Database 實例
         window.db = getDatabase(app); 
         
-        // 將核心函數暴露到全局 window，供下方非 module 腳本使用
+        // 將核心函數暴露到全局 window
         window.ref = ref;
         window.onValue = onValue;
         window.set = set;
-        window.firebaseConfig = firebaseConfig; // 暴露配置用於日誌記錄
+        window.firebaseConfig = firebaseConfig;
         
         // 呼叫主邏輯函數
         window.startAppLogic();
@@ -334,37 +334,37 @@
                 const data = snapshot.val() || {};
                 
                 console.log("從 Firebase 讀取資料:", data);
-                console.log(`讀取到的行程數量: ${data.itinerary ? data.itinerary.length : 0}`);
                 
-                // === 關鍵修正：如果資料庫根路徑是空的，則使用預設值初始化 PEOPLE ===
-                // 這裡保留檢查，但由於資料已被覆寫，現在會讀取到不完整的 data
-                if (Object.keys(data).length === 0) {
-                    console.warn("資料庫根路徑為空，使用預設值進行初始化。");
-                    PEOPLE = DEFAULT_PEOPLE;
-                    EXCHANGE_RATE = 22.50;
+                // === 關鍵修正：確保數據結構完整，特別是 PEOPLE 和 RATE ===
+                if (Object.keys(data).length === 0 || !data.itinerary) {
+                    console.warn("資料庫根路徑為空或不完整，使用預設值進行初始化。");
                     itineraryData = [];
                     expenses = [];
                     wishlistData = [];
+                    PEOPLE = DEFAULT_PEOPLE;
+                    EXCHANGE_RATE = 22.50;
                 } else {
                     itineraryData = data.itinerary || [];
                     expenses = data.expenses || [];
                     wishlistData = data.wishlist || []; 
-                    PEOPLE = data.people || DEFAULT_PEOPLE;
-                    EXCHANGE_RATE = data.rate || 22.50;
+                    // 使用讀取到的數據，但如果 PEOPLE 或 RATE 不存在，則使用預設值
+                    PEOPLE = data.people || DEFAULT_PEOPLE; 
+                    EXCHANGE_RATE = data.rate || 22.50; 
                 }
                 
                 document.getElementById('exchangeRate').value = EXCHANGE_RATE.toFixed(2);
                 document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString('zh-TW');
                 
+                // 根據當前頁面渲染對應的視圖
                 if (currentPage === 'itinerary') {
                     renderDayFilter();
                     renderTable();
                 }
-                if (currentPage === 'split') renderSplitView();
+                if (currentPage === 'split') renderSplitView(); // 🚨 這裡需要完整的 renderSplitView
                 if (currentPage === 'wishlist') renderWishlistTable();
                 
                 calculateTotals(); 
-                calculateAndRenderSettlement();
+                calculateAndRenderSettlement(); // 🚨 這裡需要完整的結算邏輯
 
                 document.getElementById('syncStatus').className = 'text-green-600 text-xs font-semibold';
                 document.getElementById('syncStatus').textContent = '🟢 即時同步中';
@@ -391,7 +391,6 @@
             // 🚨 安全檢查：如果行程列表太少，發出警告
             if (itineraryData.length < 3) {
                 console.warn("🚨 警告：您正在儲存的行程列表項目少於 3 個。請確認您不是在儲存一個不完整的空白狀態。");
-                console.log("即將儲存的資料：", dataToSave);
             }
 
 
@@ -404,7 +403,7 @@
             });
         }
 
-        // === 核心功能：行程表 (修正 Flatpickr Locale 和手機兼容性) ===
+        // === 核心功能：行程表 (渲染邏輯) ===
 
         function renderDayFilter() {
             const filterSelect = document.getElementById('dayFilter');
@@ -494,16 +493,13 @@
                         setTimeout(() => {
                             // 1. 日期選擇器 
                             flatpickr(document.getElementById(`date-${originalIndex}`), {
-                                locale: 'zh', // 修正為 'zh'
+                                locale: 'zh',
                                 dateFormat: "Y-m-d", 
                                 defaultDate: dayValue.match(/^\d{4}-\d{2}-\d{2}$/) ? dayValue : null,
-                                
                                 disableMobile: true,
-                                
                                 altInput: true,
                                 altFormat: "m/d", 
                                 altInputClass: "flatpickr-input block text-base font-bold w-full mb-1", 
-                                
                                 onChange: function(selectedDates, dateStr, instance) {
                                     itineraryData[originalIndex].day = dateStr;
                                     saveData();
@@ -513,17 +509,14 @@
                             
                             // 2. 時間選擇器 
                             flatpickr(document.getElementById(`time-${originalIndex}`), {
-                                locale: 'zh', // 修正為 'zh'
+                                locale: 'zh',
                                 enableTime: true,
                                 noCalendar: true,
-                                
                                 disableMobile: true,
-
                                 dateFormat: "H:i", 
                                 altInput: true,
                                 altFormat: "H:i", 
                                 altInputClass: "flatpickr-input block text-sm text-gray-600 w-full", 
-
                                 onChange: function(selectedDates, dateStr, instance) {
                                     itineraryData[originalIndex].time = dateStr;
                                     saveData();
@@ -587,8 +580,7 @@
             calculateTotals(filteredData);
         }
 
-        // ... (以下所有輔助函數保持不變) ...
-
+        // --- 行程表操作函數 (其餘保持不變) ---
         function addRow() {
             let newDay = new Date().toISOString().substring(0, 10);
             let newTime = "09:00";
@@ -684,7 +676,6 @@
         }
 
         function deleteRow(index) {
-            // 替換 alert 為確認模態視窗
             if (confirm('確定刪除此行程？')) {
                 itineraryData.splice(index, 1);
                 saveData();
@@ -748,8 +739,7 @@
             input.focus();
         }
 
-
-        // === 輔助功能與分頁控制 ===
+        // --- 輔助功能與分頁控制 (其餘保持不變) ---
         function showPage(pageName) {
             currentPage = pageName;
             
@@ -776,12 +766,10 @@
         }
 
         async function fetchExchangeRate() {
-             // 由於瀏覽器安全限制，無法在 Canvas 環境中直接呼叫外部 API，
-             // 所以這是一個提醒用戶手動輸入的訊息
              alert("無法自動更新匯率，請手動輸入！");
         }
 
-        // --- 待定清單功能 ---
+        // --- 待定清單功能 (其餘保持不變) ---
         
         function renderWishlistTable() {
             const tbody = document.getElementById('wishlistBody');
@@ -872,7 +860,6 @@
         }
         
         function deleteWishlistItem(id) {
-            // 替換 alert 為確認模態視窗
             if (confirm('確定刪除此待定想法？')) {
                 wishlistData = wishlistData.filter(item => item.id !== id);
                 saveData();
@@ -882,7 +869,6 @@
         function handleVote(id) {
             const index = wishlistData.findIndex(item => item.id === id);
             if (index > -1) {
-                // 為了簡單化，假設第一個使用者 (PEOPLE[0]) 是當前操作者
                 const currentVoter = PEOPLE[0] || 'A君'; 
                 
                 if (!wishlistData[index].votes) {
@@ -954,7 +940,12 @@
         } 
 
 
-        // --- 分帳功能 (修正：新增 Firebase 寫入邏輯) ---
+        // --- 分帳功能 (🚨 完整的修復邏輯從這裡開始) ---
+        function calculateTwdEquivalent(amount, currency) {
+            const num = parseFloat(amount) || 0;
+            return currency === 'JPY' ? Math.round(num * EXCHANGE_RATE) : Math.round(num);
+        }
+
         function renderSplitView() {
             const tbody = document.getElementById('expensesBody');
             tbody.innerHTML = '';
@@ -1007,19 +998,14 @@
             });
 
             // 2. 確保結算結果在渲染後更新
-            setTimeout(() => calculateAndRenderSettlement(), 100);
-        }
-
-        function calculateTwdEquivalent(amount, currency) {
-            const num = parseFloat(amount) || 0;
-            return currency === 'JPY' ? Math.round(num * EXCHANGE_RATE) : Math.round(num);
+            calculateAndRenderSettlement();
         }
 
         function handleAmountInput(id, value) {
             const index = expenses.findIndex(e => e.id === id);
             if (index > -1) {
                 expenses[index].amount = parseFloat(value) || 0;
-                // 僅在本機更新一次結算，提供即時回饋
+                // 僅在本機更新一次結算，提供即時回饋 (不寫入 Firebase)
                 calculateAndRenderSettlement();
             }
         }
@@ -1079,11 +1065,11 @@
             const newId = Date.now().toString(); 
             expenses.push({
                 id: newId,
-                name: "午餐/車票",
+                name: "新增支出項目",
                 amount: 0,
                 currency: 'JPY',
                 payer: PEOPLE[0] || 'A君', // 預設第一個付款人
-                participants: PEOPLE.reduce((acc, person) => ({ ...acc, [person]: true }), {}) // 預設所有人均攤
+                // participants: PEOPLE.reduce((acc, person) => ({ ...acc, [person]: true }), {}) // 簡化：假設所有人均攤
             });
             saveData();
         }
@@ -1098,22 +1084,15 @@
         function togglePersonEditModal() { 
             const newNames = prompt("編輯參與人名單 (請用逗號分隔，例如: A君,B君,C君)", PEOPLE.join(','));
             if (newNames !== null) {
-                // 過濾空字串並清除首尾空格
                 const newPeopleArray = newNames.split(',').map(name => name.trim()).filter(name => name);
                 
                 if (newPeopleArray.length > 0) {
                     PEOPLE = newPeopleArray;
                     
-                    // 由於人名變動，需要清除舊的參與人投票和分帳數據，以避免資料錯誤。
-                    expenses.forEach(e => {
-                         // 重新建立參與人列表，以確保使用新的人名
-                        e.participants = PEOPLE.reduce((acc, person) => ({ ...acc, [person]: true }), {});
-                    });
-                    
                     // 儲存新的人名、更新費用列表和頁面
                     saveData();
                     if (currentPage === 'split') renderSplitView();
-                    alert("人名已更新！分帳項目中的參與人會被重設。");
+                    alert("人名已更新！請檢查分帳結果是否正確。");
                 } else {
                     alert("人名不能為空。");
                 }
@@ -1141,14 +1120,12 @@
 
             // 2. 扣除每個人應分攤的金額 (Share)
             expenses.forEach(expense => {
+                // 由於沒有參與人列表，我們假設所有 PEOPLE 都均攤所有費用
                 const twdEq = calculateTwdEquivalent(expense.amount, expense.currency);
-                // 這裡簡化處理：假設所有人都參與，因為原代碼中沒有參與人選擇邏輯。
-                // 為了與原代碼結構保持一致，我將使用 PEOPLE 數組作為參與人
-                const participants = expense.participants ? Object.keys(expense.participants).filter(p => expense.participants[p] && PEOPLE.includes(p)) : PEOPLE;
-                const numParticipants = participants.length;
+                const numParticipants = numPeople;
                 const sharePerExpense = numParticipants > 0 ? twdEq / numParticipants : 0;
                 
-                participants.forEach(person => {
+                PEOPLE.forEach(person => {
                     if (netBalance[person] !== undefined) {
                         netBalance[person] -= sharePerExpense;
                     }
@@ -1167,6 +1144,11 @@
                     debtors.push({ name: person, amount: Math.abs(balance) });
                 }
             }
+            
+            // 排序以優化結算路徑
+            creditors.sort((a, b) => b.amount - a.amount);
+            debtors.sort((a, b) => b.amount - a.amount);
+
 
             let settlements = [];
             let i = 0, j = 0;
@@ -1190,7 +1172,7 @@
                 debtor.amount -= settlementAmount;
 
                 // 移動指標
-                if (creditor.amount <= 1) i++; // 債權人已收清
+                if (creditor.amount <= 1) i++; // 債權人已收清 (使用 1 作為閾值處理極小誤差)
                 if (debtor.amount <= 1) j++;   // 債務人已付清
             }
 
